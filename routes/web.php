@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CompetitionController;
+use App\Http\Controllers\CourseController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExerciseController;
 use Illuminate\Support\Facades\Route;
@@ -45,6 +46,9 @@ Route::middleware('auth')->group(function () {
     Route::delete('/competitions/{id}', [CompetitionController::class, 'destroy'])->name('competitions.destroy');
     Route::post('/competitions/{id}/approve', [CompetitionController::class, 'approve'])->name('competitions.approve');
     Route::post('/competitions/{id}/unapprove', [CompetitionController::class, 'unapprove'])->name('competitions.unapprove');
+
+    Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
+    Route::get('/courses/data', [CourseController::class, 'data'])->name('courses.data');
 });
 
 Route::middleware(['auth'])->group(function () {

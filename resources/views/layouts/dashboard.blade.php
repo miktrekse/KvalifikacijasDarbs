@@ -29,6 +29,9 @@
                         <a href="/competitions" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                             Competitions
                         </a>
+                        <a href="{{ route('courses.index') }}" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Courses Map
+                        </a>
                     </div>
                 </div>
                 <div class="flex items-center">
@@ -77,6 +80,9 @@
                 </a>
                 <a href="/competitions" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
                     Competitions
+                </a>
+                <a href="{{ route('courses.index') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+                    Courses Map
                 </a>
                 <div class="border-t border-gray-200 pt-3 mt-2">
                     <div class="px-3 py-2">
