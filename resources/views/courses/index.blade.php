@@ -23,17 +23,29 @@
             <input id="course-search" type="search" placeholder="Search by course or town" autocomplete="off">
         </label>
         <label class="course-finder__select">
-            <span>Region</span>
-            <select id="country-filter">
-                <option value="GB">United Kingdom</option>
-                <option value="US">United States</option>
-                <option value="CA">Canada</option>
-                <option value="AU">Australia</option>
-                <option value="DE">Germany</option>
-                <option value="SE">Sweden</option>
-                <option value="FI">Finland</option>
-                <option value="">World</option>
-            </select>
+            <span>Country</span>
+            <input id="country-filter" list="country-options" value="" placeholder="Search country" autocomplete="off">
+            <datalist id="country-options">
+                <option data-code="GB" value="United Kingdom"></option>
+                <option data-code="US" value="United States"></option>
+                <option data-code="CA" value="Canada"></option>
+                <option data-code="AU" value="Australia"></option>
+                <option data-code="DE" value="Germany"></option>
+                <option data-code="SE" value="Sweden"></option>
+                <option data-code="FI" value="Finland"></option>
+                <option data-code="NL" value="Netherlands"></option>
+                <option data-code="NZ" value="New Zealand"></option>
+                <option data-code="NO" value="Norway"></option>
+                <option data-code="DK" value="Denmark"></option>
+                <option data-code="AT" value="Austria"></option>
+                <option data-code="CH" value="Switzerland"></option>
+                <option data-code="FR" value="France"></option>
+                <option data-code="ES" value="Spain"></option>
+                <option data-code="IT" value="Italy"></option>
+                <option data-code="IE" value="Ireland"></option>
+                <option data-code="LV" value="Latvia"></option>
+                <option data-code="World" value="World"></option>
+            </datalist>
         </label>
         <button type="button" class="course-finder__location" id="locate-me" title="Center map on my location">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v3m0 14v3M2 12h3m14 0h3m-4.5 0a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0Z" /></svg>
@@ -54,7 +66,7 @@
         </aside>
         <div class="course-finder__map-wrap">
             <div id="course-map" aria-label="Map of disc golf courses"></div>
-            <div class="course-finder__map-note">Map © OpenStreetMap · Course data © DiscGolfAPI</div>
+            <div class="course-finder__map-note">Map and course data © OpenStreetMap contributors</div>
         </div>
     </div>
 </div>
@@ -67,7 +79,8 @@
     const courseDataUrl = '/courses/data';
     const map = L.map('course-map', { zoomControl: false, worldCopyJump: true, minZoom: 2 }).setView([30, 0], 2);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        subdomains: ['a', 'b', 'c'],
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
@@ -75,6 +88,7 @@
     const markerLayer = L.layerGroup().addTo(map);
     const searchInput = document.getElementById('course-search');
     const countryFilter = document.getElementById('country-filter');
+    const countryOptions = [...document.querySelectorAll('#country-options option')];
     const courseList = document.getElementById('course-list');
     const courseCount = document.getElementById('course-count');
     const statusText = document.getElementById('course-status-text');
@@ -102,7 +116,7 @@
             const marker = L.circleMarker([course.lat, course.lon], {
                 radius: 8, color: '#f6f2e9', weight: 3, fillColor: '#e4572e', fillOpacity: 1
             }).addTo(markerLayer);
-            marker.bindPopup(`<strong>${escapeHtml(course.name)}</strong><br><span>${escapeHtml(courseLabel(course))}</span>`);
+            marker.bindPopup(coursePopup(course), { maxWidth: 290, minWidth: 240, className: 'course-popup' });
 
             const item = document.createElement('button');
             item.type = 'button';
@@ -122,18 +136,46 @@
         return element.innerHTML;
     }
 
-    async function loadCourses() {
-        statusText.textContent = 'Loading courses';
+    function coursePopup(course) {
+        const location = courseLabel(course);
+        const holes = course.holes ? `${escapeHtml(course.holes)} holes` : 'Hole count not listed';
+        const website = course.website
+            ? `<a class="course-popup__link" href="${escapeHtml(course.website)}" target="_blank" rel="noopener">Visit course website <span>↗</span></a>`
+            : '';
+        const osmLink = course.osm_url
+            ? `<a class="course-popup__map-link" href="${escapeHtml(course.osm_url)}" target="_blank" rel="noopener">View on OpenStreetMap</a>`
+            : '';
+
+        return `<div class="course-popup__body"><span class="course-popup__eyebrow">DISC GOLF COURSE</span><strong class="course-popup__title">${escapeHtml(course.name)}</strong><span class="course-popup__location">${escapeHtml(location)}</span><div class="course-popup__stats"><span><b>${holes}</b><small>LAYOUT</small></span><span><b>${escapeHtml(course.country_code)}</b><small>REGION</small></span></div>${website}${osmLink}</div>`;
+    }
+
+    async function loadCourses(latitude = null, longitude = null) {
+        const isNearbySearch = latitude !== null && longitude !== null;
+        statusText.textContent = isNearbySearch ? 'Finding courses within 150 km' : 'Choose a country or use Near me';
         courseList.innerHTML = '<div class="course-finder__empty">Loading the course directory...</div>';
         try {
-            const params = new URLSearchParams({ country: countryFilter.value, limit: 500 });
+            const selectedCountry = countryOptions.find(option => option.value.toLowerCase() === countryFilter.value.trim().toLowerCase());
+            if (!isNearbySearch && !selectedCountry) {
+                statusText.textContent = 'Choose a country';
+                courseCount.textContent = '0 found';
+                markerLayer.clearLayers();
+                courseList.innerHTML = '<div class="course-finder__empty">Choose a country from the search suggestions to load courses.</div>';
+                return;
+            }
+
+            const countryCode = selectedCountry?.dataset.code;
+            const params = isNearbySearch
+                ? new URLSearchParams({ lat: latitude, lon: longitude })
+                : new URLSearchParams({ country: countryCode, limit: 500 });
             const response = await fetch(`${courseDataUrl}?${params}`);
             if (!response.ok) throw new Error('Unable to load courses');
             const data = await response.json();
             courseItems = (data.courses || []).filter(course => Number.isFinite(Number(course.lat)) && Number.isFinite(Number(course.lon)));
-            statusText.textContent = `${data.total || courseItems.length} courses indexed`;
+            statusText.textContent = isNearbySearch
+                ? `${data.total || courseItems.length} courses within 150 km`
+                : `${data.total || courseItems.length} courses indexed`;
             renderCourses();
-            if (courseItems.length && countryFilter.value) {
+            if (courseItems.length && (isNearbySearch || countryCode !== 'World')) {
                 map.fitBounds(courseItems.map(course => [course.lat, course.lon]), { padding: [36, 36], maxZoom: 7 });
             } else {
                 map.setView([20, 0], 2);
@@ -145,12 +187,24 @@
     }
 
     countryFilter.addEventListener('change', loadCourses);
+    countryFilter.addEventListener('input', () => {
+        const selectedCountry = countryOptions.find(option => option.value.toLowerCase() === countryFilter.value.trim().toLowerCase());
+        if (selectedCountry) loadCourses();
+    });
     searchInput.addEventListener('input', renderCourses);
     document.getElementById('locate-me').addEventListener('click', () => {
-        if (!navigator.geolocation) return;
-        navigator.geolocation.getCurrentPosition(position => {
-            map.flyTo([position.coords.latitude, position.coords.longitude], 10, { duration: 0.8 });
-        });
+        if (!navigator.geolocation) {
+            statusText.textContent = 'Location is not supported by this browser';
+            return;
+        }
+
+        countryFilter.value = '';
+        statusText.textContent = 'Requesting your location';
+        navigator.geolocation.getCurrentPosition(
+            position => loadCourses(position.coords.latitude, position.coords.longitude),
+            () => { statusText.textContent = 'Location permission was not granted'; },
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+        );
     });
     loadCourses();
 </script>
