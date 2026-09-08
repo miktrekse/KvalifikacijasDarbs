@@ -37,6 +37,30 @@
                     @enderror
                 </div>
                 <div>
+                    <label for="gender" class="sr-only">Gender</label>
+                    <select id="gender" name="gender" required
+                        class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm">
+                        <option value="">Select gender</option>
+                        <option value="female" {{ old('gender') === 'female' ? 'selected' : '' }}>Female</option>
+                        <option value="male" {{ old('gender') === 'male' ? 'selected' : '' }}>Male</option>
+                    </select>
+                    @error('gender')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+                <div>
+                    <label for="date_of_birth" class="sr-only">Date of birth</label>
+                    <input id="date_of_birth" name="date_of_birth" type="date" max="{{ now()->toDateString() }}" required
+                        class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                        value="{{ old('date_of_birth') }}">
+                    @error('date_of_birth')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+                <p class="px-3 py-2 text-xs text-gray-500">
+                    Your gender and age help determine eligibility for female, masters, and junior divisions.
+                </p>
+                <div>
                     <label for="password" class="sr-only">Password</label>
                     <input id="password" name="password" type="password" autocomplete="new-password" required
                         class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"

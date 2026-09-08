@@ -115,6 +115,38 @@
                 </div>
             </div>
             @endif
+
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">Registered players</h2>
+                        <p class="mt-1 text-sm text-gray-500">Participants grouped by their selected division.</p>
+                    </div>
+                    <span class="shrink-0 px-3 py-1 bg-blue-100 text-blue-800 text-sm font-semibold rounded-full">{{ $competition->registrations->count() }} registered</span>
+                </div>
+                @if($competition->registrations->count())
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        @foreach($competition->registrations as $registration)
+                            <div class="flex items-center justify-between gap-4 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                                <div class="flex min-w-0 items-center gap-3">
+                                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700">
+                                        {{ strtoupper(substr($registration->user->name, 0, 1)) }}
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="truncate font-semibold text-gray-800">{{ $registration->user->name }}</p>
+                                        <p class="text-sm text-gray-500">{{ $registration->division }}</p>
+                                    </div>
+                                </div>
+                                <time class="shrink-0 text-xs text-gray-400" datetime="{{ $registration->created_at->toISOString() }}">
+                                    {{ $registration->created_at->format('M j, Y') }}
+                                </time>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">No one has registered yet.</p>
+                @endif
+            </div>
         </div>
 
         <div class="space-y-6">
@@ -123,8 +155,13 @@
                 
                 <div class="space-y-4">
                     <div class="flex justify-between items-center pb-3 border-b border-gray-100">
+                        <span class="text-gray-600">Players</span>
+                        <span class="font-semibold text-gray-800">{{ ucfirst($competition->competition_type ?? 'singles') }}</span>
+                    </div>
+
+                    <div class="flex justify-between items-center pb-3 border-b border-gray-100">
                         <span class="text-gray-600">Format</span>
-                        <span class="font-semibold text-gray-800">{{ ucfirst($competition->format) }}</span>
+                        <span class="font-semibold text-gray-800">{{ ucfirst(str_replace('_', ' ', $competition->format)) }}</span>
                     </div>
                     
                     <div class="flex justify-between items-center pb-3 border-b border-gray-100">
@@ -172,6 +209,21 @@
                     </div>
                 @endif
 
+                @auth
+                    @if($competition->status === 'upcoming' && (!$competition->max_participants || $competition->registrations->count() < $competition->max_participants))
+                        <button type="button" id="open-registration-modal"
+                            class="block w-full mb-3 text-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                            Register for this competition
+                        </button>
+                    @elseif($competition->max_participants && $competition->registrations->count() >= $competition->max_participants)
+                        <p class="mb-3 text-sm text-red-600 text-center">Registration is full.</p>
+                    @endif
+                @else
+                    <a href="{{ route('login') }}" class="block w-full mb-3 text-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                        Sign in to register
+                    </a>
+                @endauth
+
                 @if($competition->registration_link)
                     <a href="{{ $competition->registration_link }}" target="_blank" rel="noopener noreferrer" 
                         class="block w-full text-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
@@ -200,4 +252,58 @@
         </div>
     </div>
 </div>
+
+@auth
+<div id="registration-modal" data-open="{{ $errors->has('division') || $errors->has('phone') ? 'true' : 'false' }}" class="fixed inset-0 z-50 hidden items-center justify-center bg-gray-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="registration-modal-title">
+    <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <h2 id="registration-modal-title" class="text-xl font-bold text-gray-800">Register for {{ $competition->name }}</h2>
+                <p class="mt-1 text-sm text-gray-500">Choose an eligible division and provide a phone number for the organizer.</p>
+            </div>
+            <button type="button" id="close-registration-modal" class="text-2xl leading-none text-gray-400 hover:text-gray-700" aria-label="Close">&times;</button>
+        </div>
+        <form method="POST" action="{{ route('competitions.register', $competition->id) }}" class="mt-5 space-y-4">
+            @csrf
+            <div>
+                <label for="registration-division" class="block text-sm font-medium text-gray-700">Division</label>
+                <select name="division" id="registration-division" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
+                    <option value="">Select a division</option>
+                    @foreach($competition->divisionsArray as $division)
+                        <option value="{{ $division }}" {{ old('division') === $division ? 'selected' : '' }}>{{ $division }}</option>
+                    @endforeach
+                </select>
+                @error('division')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <div>
+                <label for="registration-phone" class="block text-sm font-medium text-gray-700">Phone number</label>
+                <input type="tel" name="phone" id="registration-phone" value="{{ old('phone') }}" required placeholder="+371 2000 0000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
+                @error('phone')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" id="cancel-registration-modal" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Confirm registration</button>
+            </div>
+        </form>
+    </div>
+</div>
+@endauth
 @endsection
+
+@push('scripts')
+<script>
+    const registrationModal = document.getElementById('registration-modal');
+    const openRegistrationModal = document.getElementById('open-registration-modal');
+    const closeRegistrationModal = () => registrationModal?.classList.replace('flex', 'hidden');
+    const showRegistrationModal = () => registrationModal?.classList.replace('hidden', 'flex');
+    openRegistrationModal?.addEventListener('click', showRegistrationModal);
+    document.getElementById('close-registration-modal')?.addEventListener('click', closeRegistrationModal);
+    document.getElementById('cancel-registration-modal')?.addEventListener('click', closeRegistrationModal);
+    registrationModal?.addEventListener('click', event => {
+        if (event.target === registrationModal) closeRegistrationModal();
+    });
+    if (registrationModal?.dataset.open === 'true') {
+        showRegistrationModal();
+    }
+</script>
+@endpush

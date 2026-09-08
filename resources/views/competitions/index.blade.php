@@ -99,8 +99,11 @@
                         </div>
 
                         <div class="flex flex-wrap gap-2 mb-4">
+                            <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                {{ ucfirst($competition->competition_type ?? 'singles') }}
+                            </span>
                             <span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
-                                {{ ucfirst($competition->format) }}
+                                {{ ucfirst(str_replace('_', ' ', $competition->format)) }}
                             </span>
                             <span class="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
                                 {{ $competition->holes }} holes

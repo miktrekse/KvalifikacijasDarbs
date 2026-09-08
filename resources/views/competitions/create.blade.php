@@ -128,14 +128,18 @@
                     
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div>
+                            <label for="competition_type" class="block text-sm font-medium text-gray-700 mb-1">Players *</label>
+                            <select name="competition_type" id="competition_type" required
+                                class="w-full rounded-lg border-gray-300 border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('competition_type') border-red-500 @enderror">
+                                <option value="singles" {{ old('competition_type', 'singles') == 'singles' ? 'selected' : '' }}>Singles</option>
+                                <option value="doubles" {{ old('competition_type') == 'doubles' ? 'selected' : '' }}>Doubles</option>
+                            </select>
+                        </div>
+
+                        <div>
                             <label for="format" class="block text-sm font-medium text-gray-700 mb-1">Format *</label>
                             <select name="format" id="format" required
                                 class="w-full rounded-lg border-gray-300 border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('format') border-red-500 @enderror">
-                                <option value="stroke_play" {{ old('format') == 'stroke_play' ? 'selected' : '' }}>Stroke Play</option>
-                                <option value="match_play" {{ old('format') == 'match_play' ? 'selected' : '' }}>Match Play</option>
-                                <option value="stableford" {{ old('format') == 'stableford' ? 'selected' : '' }}>Stableford</option>
-                                <option value="best_disc" {{ old('format') == 'best_disc' ? 'selected' : '' }}>Best Disc</option>
-                                <option value="team" {{ old('format') == 'team' ? 'selected' : '' }}>Team Competition</option>
                             </select>
                             @error('format')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -144,12 +148,8 @@
 
                         <div>
                             <label for="holes" class="block text-sm font-medium text-gray-700 mb-1">Number of Holes *</label>
-                            <select name="holes" id="holes" required
+                            <input type="number" name="holes" id="holes" min="1" max="99" required value="{{ old('holes', 18) }}"
                                 class="w-full rounded-lg border-gray-300 border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('holes') border-red-500 @enderror">
-                                <option value="9" {{ old('holes') == '9' ? 'selected' : '' }}>9 Holes</option>
-                                <option value="18" {{ old('holes', '18') == '18' ? 'selected' : '' }}>18 Holes</option>
-                                <option value="27" {{ old('holes') == '27' ? 'selected' : '' }}>27 Holes</option>
-                            </select>
                             @error('holes')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror
@@ -157,9 +157,22 @@
 
                         <div class="md:col-span-2">
                             <label for="divisions" class="block text-sm font-medium text-gray-700 mb-1">Divisions</label>
-                            <input type="text" name="divisions" id="divisions" value="{{ old('divisions') }}"
-                                class="w-full rounded-lg border-gray-300 border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('divisions') border-red-500 @enderror"
-                                placeholder="e.g., Open, Amateur, Women, Juniors (comma separated)">
+                            <input type="hidden" name="divisions" value="">
+                            <div class="competition-divisions-grid">
+                                @foreach([
+                                    'MPO' => 'Open · 930+ rating', 'MA1' => '929-880 rating', 'MA2' => '879-820 rating',
+                                    'MA3' => '819-750 rating', 'MA4' => '749-0 rating', 'FPO' => 'Women only · 880+ rating',
+                                    'FA2' => 'Women only · 879-820 rating', 'FA3' => 'Women only · 819-750 rating', 'FA4' => 'Women only · 749-0 rating',
+                                    'MP60' => 'Age 60+', 'MP50' => 'Age 50+', 'MP40' => 'Age 40+',
+                                    'FP40' => 'Women only · age 40+', 'MJ18' => 'Boys · under 18', 'MJ15' => 'Boys · under 15', 'FJ18' => 'Girls · under 18'
+                                ] as $division => $threshold)
+                                    <label class="competition-division-option">
+                                        <input type="checkbox" name="division_options[]" value="{{ $division }}" {{ in_array($division, old('division_options', []), true) ? 'checked' : '' }}>
+                                        <span><strong>{{ $division }}</strong><small>{{ $threshold }}</small></span>
+                                    </label>
+                                @endforeach
+                            </div>
+                            <p class="mt-1 text-sm text-gray-500">Select all divisions available. Gender, age, and rating requirements should be checked when registering.</p>
                             @error('divisions')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror
@@ -276,7 +289,8 @@
 
         function selectCourse(course) {
             document.getElementById('course_name').value = course.name;
-            if (course.locality) document.getElementById('location').value = course.locality;
+            if (course.address || course.locality) document.getElementById('location').value = course.address || course.locality;
+            if (course.holes) document.getElementById('holes').value = course.holes;
             map.flyTo([course.lat, course.lon], 13, { duration: 0.6 });
         }
 
@@ -336,6 +350,20 @@
             else status.textContent = 'Choose a country from the suggestions.';
         });
         search.addEventListener('input', renderCourses);
+        const type = document.getElementById('competition_type');
+        const format = document.getElementById('format');
+        const selectedFormat = "{{ old('format', 'stroke_play') }}";
+        const formats = {
+            singles: [['stroke_play', 'Stroke Play'], ['match_play', 'Match Play'], ['stableford', 'Stableford']],
+            doubles: [['doubles_match_play', 'Doubles Match Play'], ['doubles_best_disc', 'Best Disc'], ['doubles_team', 'Team Competition']]
+        };
+        function updateFormats() {
+            const options = formats[type.value] || formats.singles;
+            format.innerHTML = options.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+            format.value = options.some(([value]) => value === selectedFormat) ? selectedFormat : options[0][0];
+        }
+        type.addEventListener('change', updateFormats);
+        updateFormats();
         setTimeout(() => map.invalidateSize(), 100);
         requestNearbyCourses();
     })();

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Competition extends Model
 {
@@ -18,6 +19,7 @@ class Competition extends Model
         'location',
         'course_name',
         'format',
+        'competition_type',
         'divisions',
         'holes',
         'entry_fee',
@@ -47,6 +49,11 @@ class Competition extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function registrations(): HasMany
+    {
+        return $this->hasMany(CompetitionRegistration::class);
     }
 
     public function getDivisionsArrayAttribute(): array

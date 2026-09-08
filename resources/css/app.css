@@ -22,6 +22,14 @@
 }
 
 @layer components {
+    .competition-divisions-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
+    .competition-division-option { display: flex; align-items: center; gap: 0.6rem; min-height: 3rem; padding: 0.55rem 0.65rem; border: 1px solid #e1e6e1; border-radius: 0.35rem; background: #fbfdfb; cursor: pointer; }
+    .competition-division-option:hover { border-color: #176b67; background: #f0f8f2; }
+    .competition-division-option input { width: 1rem; height: 1rem; accent-color: #176b67; }
+    .competition-division-option span { display: flex; flex-direction: column; gap: 0.1rem; }
+    .competition-division-option strong { color: #17242a; font-size: 0.78rem; }
+    .competition-division-option small { color: #647277; font-size: 0.65rem; }
+    @media (max-width: 640px) { .competition-divisions-grid { grid-template-columns: 1fr; } }
     .competition-course-picker { margin-top: 1.25rem; padding: 1rem; border: 1px solid #dbe4df; border-radius: 0.5rem; background: #f7faf7; }
     .competition-course-picker__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
     .competition-course-picker__eyebrow { color: #e4572e; font-size: 0.65rem; font-weight: 800; letter-spacing: 0.12em; }

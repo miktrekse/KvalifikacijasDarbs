@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Competition;
+use App\Models\CompetitionRegistration;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class CompetitionController extends Controller
 {
@@ -48,9 +50,14 @@ class CompetitionController extends Controller
             'event_date' => 'required|date|after_or_equal:today',
             'location' => 'nullable|string|max:255',
             'course_name' => 'nullable|string|max:255',
-            'format' => 'required|in:stroke_play,match_play,stableford,best_disc,team',
+            'competition_type' => 'required|in:singles,doubles',
+            'format' => ['required', Rule::in($request->input('competition_type') === 'doubles'
+                ? ['doubles_match_play', 'doubles_best_disc', 'doubles_team']
+                : ['stroke_play', 'match_play', 'stableford'])],
             'divisions' => 'nullable|string',
-            'holes' => 'required|integer|min:9|max:27',
+            'division_options' => 'nullable|array',
+            'division_options.*' => 'in:MPO,MA1,MA2,MA3,MA4,FPO,FA2,FA3,FA4,MP60,MP50,MP40,FP40,MJ18,MJ15,FJ18',
+            'holes' => 'required|integer|min:1|max:99',
             'entry_fee' => 'nullable|numeric|min:0',
             'currency' => 'nullable|string|size:3',
             'max_participants' => 'nullable|integer|min:1',
@@ -59,8 +66,8 @@ class CompetitionController extends Controller
             'is_public' => 'boolean',
         ]);
 
-        $divisions = [];
-        if (!empty($validated['divisions'])) {
+        $divisions = $validated['division_options'] ?? [];
+        if (!$divisions && !empty($validated['divisions'])) {
             $divisions = array_map('trim', explode(',', $validated['divisions']));
             $divisions = array_filter($divisions);
         }
@@ -73,6 +80,7 @@ class CompetitionController extends Controller
             'location' => $validated['location'] ?? null,
             'course_name' => $validated['course_name'] ?? null,
             'format' => $validated['format'],
+            'competition_type' => $validated['competition_type'],
             'divisions' => json_encode($divisions),
             'holes' => $validated['holes'],
             'entry_fee' => $validated['entry_fee'] ?? 0,
@@ -92,7 +100,7 @@ class CompetitionController extends Controller
 
     public function view($id)
     {
-        $competition = Competition::with('user')->findOrFail($id);
+        $competition = Competition::with(['user', 'registrations.user'])->findOrFail($id);
 
         if (!$competition->is_approved || !$competition->is_public) {
             if (!Auth::check() || !Auth::user()->isAdmin()) {
@@ -101,6 +109,32 @@ class CompetitionController extends Controller
         }
 
         return view('competitions.view', compact('competition'));
+    }
+
+    public function register(Request $request, $id)
+    {
+        $competition = Competition::with('registrations')->findOrFail($id);
+        $divisionOptions = $competition->divisionsArray;
+
+        $validated = $request->validate([
+            'division' => ['required', Rule::in($divisionOptions)],
+            'phone' => ['required', 'string', 'min:7', 'max:40', 'regex:/^[0-9+() .-]+$/'],
+        ]);
+
+        if ($competition->max_participants && $competition->registrations->count() >= $competition->max_participants) {
+            return back()->withErrors(['division' => 'This competition is full.'])->withInput();
+        }
+
+        if (!$request->user()->meetsDivisionRequirements($validated['division'])) {
+            return back()->withErrors(['division' => 'Your profile does not meet this division\'s age or gender requirements.'])->withInput();
+        }
+
+        CompetitionRegistration::updateOrCreate(
+            ['competition_id' => $competition->id, 'user_id' => $request->user()->id],
+            ['division' => $validated['division'], 'phone' => $validated['phone']]
+        );
+
+        return back()->with('success', 'You are registered for the competition.');
     }
 
     public function edit($id)
@@ -128,9 +162,14 @@ class CompetitionController extends Controller
             'event_date' => 'required|date',
             'location' => 'nullable|string|max:255',
             'course_name' => 'nullable|string|max:255',
-            'format' => 'required|in:stroke_play,match_play,stableford,best_disc,team',
+            'competition_type' => 'required|in:singles,doubles',
+            'format' => ['required', Rule::in($request->input('competition_type') === 'doubles'
+                ? ['doubles_match_play', 'doubles_best_disc', 'doubles_team']
+                : ['stroke_play', 'match_play', 'stableford'])],
             'divisions' => 'nullable|string',
-            'holes' => 'required|integer|min:9|max:27',
+            'division_options' => 'nullable|array',
+            'division_options.*' => 'in:MPO,MA1,MA2,MA3,MA4,FPO,FA2,FA3,FA4,MP60,MP50,MP40,FP40,MJ18,MJ15,FJ18',
+            'holes' => 'required|integer|min:1|max:99',
             'entry_fee' => 'nullable|numeric|min:0',
             'currency' => 'nullable|string|size:3',
             'max_participants' => 'nullable|integer|min:1',
@@ -141,8 +180,8 @@ class CompetitionController extends Controller
             'is_public' => 'boolean',
         ]);
 
-        $divisions = [];
-        if (!empty($validated['divisions'])) {
+        $divisions = $validated['division_options'] ?? [];
+        if (!$divisions && !empty($validated['divisions'])) {
             $divisions = array_map('trim', explode(',', $validated['divisions']));
             $divisions = array_filter($divisions);
         }
@@ -154,6 +193,7 @@ class CompetitionController extends Controller
             'location' => $validated['location'] ?? null,
             'course_name' => $validated['course_name'] ?? null,
             'format' => $validated['format'],
+            'competition_type' => $validated['competition_type'],
             'divisions' => json_encode($divisions),
             'holes' => $validated['holes'],
             'entry_fee' => $validated['entry_fee'] ?? 0,

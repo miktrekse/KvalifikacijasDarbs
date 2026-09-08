@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -62,30 +63,46 @@ class CourseController extends Controller
             ][$country] ?? [null];
 
             $elements = collect();
-            foreach ($chunks as $chunk) {
+            $queries = collect($chunks)->map(function (?string $chunk) use ($isNearbySearch, $nearbyBounds, $country) {
                 if ($isNearbySearch) {
-                    $query = '[out:json][timeout:35];(nwr["leisure"="disc_golf_course"](' . $nearbyBounds . ');nwr["sport"="disc_golf"](' . $nearbyBounds . '););out center;';
-                } else {
-                    $area = $chunk ? '(area.searchArea)(' . $chunk . ')' : '(area.searchArea)';
-                    $query = '[out:json][timeout:35];area["ISO3166-1"="' . $country . '"]["boundary"="administrative"]->.searchArea;(nwr["leisure"="disc_golf_course"]' . $area . ';nwr["sport"="disc_golf"]' . $area . ';);out center;';
+                    return '[out:json][timeout:35];(nwr["leisure"="disc_golf_course"](' . $nearbyBounds . ');nwr["sport"="disc_golf"](' . $nearbyBounds . '););out center;';
                 }
 
-                $endpoints = $isNearbySearch
-                    ? ['https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter']
-                    : ['https://overpass.kumi.systems/api/interpreter'];
+                $area = $chunk ? '(area.searchArea)(' . $chunk . ')' : '(area.searchArea)';
+                return '[out:json][timeout:35];area["ISO3166-1"="' . $country . '"]["boundary"="administrative"]->.searchArea;(nwr["leisure"="disc_golf_course"]' . $area . ';nwr["sport"="disc_golf"]' . $area . ';);out center;';
+            });
 
-                foreach ($endpoints as $endpoint) {
-                    try {
-                        $response = Http::withHeaders(['User-Agent' => 'DiscStats/1.0'])
-                            ->acceptJson()
-                            ->timeout(35)
-                            ->get($endpoint, ['data' => $query])
-                            ->throw();
+            if (!$isNearbySearch && $queries->count() > 1) {
+                $responses = Http::pool(function (Pool $pool) use ($queries) {
+                    return $queries->map(fn (string $query) => $pool
+                        ->withHeaders(['User-Agent' => 'DiscStats/1.0'])
+                        ->acceptJson()
+                        ->timeout(40)
+                        ->get('https://overpass.kumi.systems/api/interpreter', ['data' => $query]))->all();
+                });
+
+                foreach ($responses as $response) {
+                    if ($response->successful()) {
                         $elements = $elements->merge($response->json('elements', []));
                         $successfulQuery = true;
-                        break;
-                    } catch (RequestException|ConnectionException $exception) {
-                        continue;
+                    }
+                }
+            } else {
+                foreach ($queries as $query) {
+                    $endpoints = ['https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+                    foreach ($endpoints as $endpoint) {
+                        try {
+                            $response = Http::withHeaders(['User-Agent' => 'DiscStats/1.0'])
+                                ->acceptJson()
+                                ->timeout(35)
+                                ->get($endpoint, ['data' => $query])
+                                ->throw();
+                            $elements = $elements->merge($response->json('elements', []));
+                            $successfulQuery = true;
+                            break;
+                        } catch (RequestException|ConnectionException $exception) {
+                            continue;
+                        }
                     }
                 }
             }
