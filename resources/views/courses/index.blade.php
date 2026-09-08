@@ -139,14 +139,24 @@
     function coursePopup(course) {
         const location = courseLabel(course);
         const holes = course.holes ? `${escapeHtml(course.holes)} holes` : 'Hole count not listed';
+        const details = [
+            course.operator ? `<span><b>Operator</b>${escapeHtml(course.operator)}</span>` : '',
+            course.access ? `<span><b>Access</b>${escapeHtml(course.access)}</span>` : '',
+            course.fee ? `<span><b>Fee</b>${escapeHtml(course.fee)}</span>` : '',
+            course.opening_hours ? `<span><b>Hours</b>${escapeHtml(course.opening_hours)}</span>` : '',
+        ].filter(Boolean).join('');
+        const address = course.address ? `<span class="course-popup__address">${escapeHtml(course.address)}</span>` : '';
+        const phone = course.phone ? `<a class="course-popup__phone" href="tel:${escapeHtml(course.phone)}">${escapeHtml(course.phone)}</a>` : '';
         const website = course.website
             ? `<a class="course-popup__link" href="${escapeHtml(course.website)}" target="_blank" rel="noopener">Visit course website <span>↗</span></a>`
             : '';
         const osmLink = course.osm_url
             ? `<a class="course-popup__map-link" href="${escapeHtml(course.osm_url)}" target="_blank" rel="noopener">View on OpenStreetMap</a>`
             : '';
+        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${course.name} ${course.lat},${course.lon}`)}`;
+        const googleLink = `<a class="course-popup__google-link" href="${googleMapsUrl}" target="_blank" rel="noopener">Check Google Maps reviews <span>↗</span></a>`;
 
-        return `<div class="course-popup__body"><span class="course-popup__eyebrow">DISC GOLF COURSE</span><strong class="course-popup__title">${escapeHtml(course.name)}</strong><span class="course-popup__location">${escapeHtml(location)}</span><div class="course-popup__stats"><span><b>${holes}</b><small>LAYOUT</small></span><span><b>${escapeHtml(course.country_code)}</b><small>REGION</small></span></div>${website}${osmLink}</div>`;
+        return `<div class="course-popup__body"><span class="course-popup__eyebrow">DISC GOLF COURSE</span><strong class="course-popup__title">${escapeHtml(course.name)}</strong><span class="course-popup__location">${escapeHtml(location)}</span>${address}${phone}<div class="course-popup__stats"><span><b>${holes}</b><small>LAYOUT</small></span><span><b>${escapeHtml(course.country_code)}</b><small>REGION</small></span></div>${details ? `<div class="course-popup__details">${details}</div>` : ''}<div class="course-popup__actions">${googleLink}${website}${osmLink}</div></div>`;
     }
 
     async function loadCourses(latitude = null, longitude = null) {

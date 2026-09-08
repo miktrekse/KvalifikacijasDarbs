@@ -84,6 +84,42 @@
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror
                         </div>
+
+                        <div class="md:col-span-2 competition-course-picker">
+                            <div class="competition-course-picker__heading">
+                                <div>
+                                    <span class="competition-course-picker__eyebrow">COURSE FINDER</span>
+                                    <h4>Choose a course from the map</h4>
+                                    <p id="competition-course-status">Allow location access for nearby recommendations.</p>
+                                </div>
+                                <button type="button" id="competition-near-me" class="competition-course-picker__nearby">Use my location</button>
+                            </div>
+                            <div class="competition-course-picker__tools">
+                                <input type="search" id="competition-course-search" placeholder="Search course names" autocomplete="off">
+                                <input type="text" id="competition-country-search" list="competition-country-options" placeholder="Search country for farther courses" autocomplete="off">
+                                <datalist id="competition-country-options">
+                                    <option data-code="GB" value="United Kingdom"></option>
+                                    <option data-code="US" value="United States"></option>
+                                    <option data-code="CA" value="Canada"></option>
+                                    <option data-code="LV" value="Latvia"></option>
+                                    <option data-code="DE" value="Germany"></option>
+                                    <option data-code="SE" value="Sweden"></option>
+                                    <option data-code="FI" value="Finland"></option>
+                                    <option data-code="AU" value="Australia"></option>
+                                    <option data-code="NZ" value="New Zealand"></option>
+                                    <option data-code="FR" value="France"></option>
+                                    <option data-code="ES" value="Spain"></option>
+                                    <option data-code="IT" value="Italy"></option>
+                                </datalist>
+                                <button type="button" id="competition-country-load">Search country</button>
+                            </div>
+                            <div class="competition-course-picker__body">
+                                <div id="competition-course-list" class="competition-course-picker__list">
+                                    <p>Nearby courses will appear here.</p>
+                                </div>
+                                <div id="competition-course-map" class="competition-course-picker__map" aria-label="Choose a competition course on the map"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -211,3 +247,97 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+    (() => {
+        const map = L.map('competition-course-map').setView([30, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            subdomains: ['a', 'b', 'c'],
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        const courseLayer = L.layerGroup().addTo(map);
+        const list = document.getElementById('competition-course-list');
+        const status = document.getElementById('competition-course-status');
+        const search = document.getElementById('competition-course-search');
+        const countrySearch = document.getElementById('competition-country-search');
+        const countryOptions = [...document.querySelectorAll('#competition-country-options option')];
+        let courses = [];
+
+        function escapeHtml(value) {
+            const element = document.createElement('div');
+            element.textContent = value || '';
+            return element.innerHTML;
+        }
+
+        function selectCourse(course) {
+            document.getElementById('course_name').value = course.name;
+            if (course.locality) document.getElementById('location').value = course.locality;
+            map.flyTo([course.lat, course.lon], 13, { duration: 0.6 });
+        }
+
+        function renderCourses() {
+            const query = search.value.trim().toLowerCase();
+            const visible = courses.filter(course => course.name.toLowerCase().includes(query));
+            courseLayer.clearLayers();
+            list.innerHTML = '';
+            if (!visible.length) {
+                list.innerHTML = '<p class="competition-course-picker__empty">No matching courses found.</p>';
+                return;
+            }
+
+            visible.forEach(course => {
+                const marker = L.marker([course.lat, course.lon]).addTo(courseLayer);
+                marker.bindPopup(`<strong>${escapeHtml(course.name)}</strong><br>${escapeHtml(course.locality || 'Location from OpenStreetMap')}`);
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'competition-course-picker__course';
+                button.innerHTML = `<strong>${escapeHtml(course.name)}</strong><small>${escapeHtml(course.locality || 'Location unavailable')} ${course.distance_km ? `· ${course.distance_km} km away` : ''}</small>`;
+                button.addEventListener('click', () => { selectCourse(course); marker.openPopup(); });
+                list.appendChild(button);
+            });
+        }
+
+        async function loadCourses(parameters, label) {
+            status.textContent = `Finding ${label}...`;
+            list.innerHTML = '<p class="competition-course-picker__empty">Loading courses...</p>';
+            try {
+                const response = await fetch(`/courses/data?${new URLSearchParams(parameters)}`);
+                if (!response.ok) throw new Error('Course search failed');
+                const data = await response.json();
+                courses = (data.courses || []).filter(course => Number.isFinite(Number(course.lat)) && Number.isFinite(Number(course.lon)));
+                status.textContent = `${courses.length} courses available${parameters.lat ? ' within 150 km' : ''}`;
+                renderCourses();
+                if (courses.length) map.fitBounds(courses.map(course => [course.lat, course.lon]), { padding: [24, 24], maxZoom: parameters.lat ? 10 : 7 });
+            } catch (error) {
+                status.textContent = 'Course search is temporarily unavailable.';
+                list.innerHTML = '<p class="competition-course-picker__empty">Try again or search another country.</p>';
+            }
+        }
+
+        function requestNearbyCourses() {
+            if (!navigator.geolocation) { status.textContent = 'Location is not supported by this browser.'; return; }
+            status.textContent = 'Requesting your location...';
+            navigator.geolocation.getCurrentPosition(
+                position => loadCourses({ lat: position.coords.latitude, lon: position.coords.longitude }, 'nearby courses'),
+                () => { status.textContent = 'Location permission was not granted.'; },
+                { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+            );
+        }
+
+        document.getElementById('competition-near-me').addEventListener('click', requestNearbyCourses);
+        document.getElementById('competition-country-load').addEventListener('click', () => {
+            const option = countryOptions.find(item => item.value.toLowerCase() === countrySearch.value.trim().toLowerCase());
+            if (option) loadCourses({ country: option.dataset.code }, `${option.value} courses`);
+            else status.textContent = 'Choose a country from the suggestions.';
+        });
+        search.addEventListener('input', renderCourses);
+        setTimeout(() => map.invalidateSize(), 100);
+        requestNearbyCourses();
+    })();
+</script>
+@endpush

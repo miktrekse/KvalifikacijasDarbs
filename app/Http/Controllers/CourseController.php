@@ -113,7 +113,19 @@ class CourseController extends Controller
                         'lat' => $coordinates[0],
                         'lon' => $coordinates[1],
                         'locality' => $tags['addr:city'] ?? $tags['addr:town'] ?? null,
+                        'address' => collect([
+                            trim(($tags['addr:housenumber'] ?? '') . ' ' . ($tags['addr:street'] ?? '')),
+                            $tags['addr:postcode'] ?? null,
+                            $tags['addr:city'] ?? $tags['addr:town'] ?? null,
+                        ])->filter()->implode(', '),
                         'website' => $tags['website'] ?? $tags['contact:website'] ?? null,
+                        'operator' => $tags['operator'] ?? $tags['brand'] ?? null,
+                        'phone' => $tags['phone'] ?? $tags['contact:phone'] ?? null,
+                        'opening_hours' => $tags['opening_hours'] ?? null,
+                        'access' => $tags['access'] ?? null,
+                        'fee' => $tags['fee'] ?? null,
+                        'surface' => $tags['surface'] ?? null,
+                        'wheelchair' => $tags['wheelchair'] ?? null,
                         'holes' => $tags['disc_golf:holes'] ?? null,
                         'country_code' => $isNearbySearch ? ($tags['addr:country'] ?? 'Nearby') : $country,
                         'osm_url' => isset($element['type'], $element['id'])
@@ -122,6 +134,18 @@ class CourseController extends Controller
                     ];
                 })
                 ->filter(fn (array $course) => $course['lat'] !== null && $course['lon'] !== null)
+                ->map(function (array $course) use ($isNearbySearch, $latitude, $longitude) {
+                    if ($isNearbySearch) {
+                        $latitudeDifference = deg2rad($course['lat'] - $latitude);
+                        $longitudeDifference = deg2rad($course['lon'] - $longitude);
+                        $a = sin($latitudeDifference / 2) ** 2
+                            + cos(deg2rad($latitude)) * cos(deg2rad($course['lat']))
+                            * sin($longitudeDifference / 2) ** 2;
+                        $course['distance_km'] = round(6371 * 2 * asin(min(1, sqrt($a))), 1);
+                    }
+
+                    return $course;
+                })
                 ->filter(function (array $course) use ($isNearbySearch, $latitude, $longitude) {
                     if (!$isNearbySearch) {
                         return true;
@@ -137,6 +161,7 @@ class CourseController extends Controller
                     return $earthRadius * 2 * asin(min(1, sqrt($a))) <= 150000;
                 })
                 ->unique(fn (array $course) => $course['id'])
+                ->sortBy(fn (array $course) => $course['distance_km'] ?? PHP_INT_MAX)
                 ->values();
 
             return response()->json([
