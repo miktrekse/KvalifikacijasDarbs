@@ -21,12 +21,14 @@ class Exercise extends Model
         'difficulty',
         'duration_minutes',
         'equipment',
+        'throwing_styles',
         'tags',
         'is_public',
     ];
 
     protected $casts = [
         'tags' => 'array',
+        'throwing_styles' => 'array',
         'is_public' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

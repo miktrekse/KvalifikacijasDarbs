@@ -85,14 +85,37 @@
                 <label for="equipment" class="block text-sm font-medium text-gray-700 mb-2">
                     Equipment Needed
                 </label>
-                <input type="text" name="equipment" id="equipment"
-                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="e.g., Putters, Mid-ranges"
-                    value="{{ old('equipment') }}">
+                <input type="hidden" name="equipment" value="">
+                <div class="exercise-choice-grid">
+                    @foreach(['putters' => 'Putters', 'midranges' => 'Midranges', 'fairway-drivers' => 'Fairway drivers', 'distance-drivers' => 'Distance drivers'] as $value => $label)
+                        <label class="exercise-choice">
+                            <input type="checkbox" name="equipment_options[]" value="{{ $value }}" {{ in_array($value, old('equipment_options', []), true) ? 'checked' : '' }}>
+                            <span>{{ $label }}</span>
+                        </label>
+                    @endforeach
+                </div>
                 @error('equipment')
                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                 @enderror
             </div>
+        </div>
+
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Throwing style</label>
+            <div class="exercise-choice-grid exercise-throwing-styles">
+                <label class="exercise-choice">
+                    <input type="checkbox" name="throwing_styles[]" value="backhand" {{ in_array('backhand', old('throwing_styles', []), true) ? 'checked' : '' }}>
+                    <span>Backhand</span>
+                </label>
+                <label class="exercise-choice">
+                    <input type="checkbox" name="throwing_styles[]" value="forehand" {{ in_array('forehand', old('throwing_styles', []), true) ? 'checked' : '' }}>
+                    <span>Forehand</span>
+                </label>
+            </div>
+            <p id="putting-style-help" class="mt-1 text-sm text-gray-500">Choose one or both. Throwing style does not apply to Putting exercises.</p>
+            @error('throwing_styles')
+                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+            @enderror
         </div>
 
         <div class="mb-6">
@@ -152,3 +175,20 @@
     </form>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    (() => {
+        const category = document.getElementById('category_id');
+        const throwingStyles = [...document.querySelectorAll('input[name="throwing_styles[]"]')];
+        const help = document.getElementById('putting-style-help');
+        function updateThrowingStyles() {
+            const isPutting = category.options[category.selectedIndex]?.text.trim().toLowerCase() === 'putting';
+            throwingStyles.forEach(input => { input.checked = isPutting ? false : input.checked; input.disabled = isPutting; });
+            help.textContent = isPutting ? 'Throwing style is not used for Putting exercises.' : 'Choose one or both. Backhand and forehand can be selected together.';
+        }
+        category.addEventListener('change', updateThrowingStyles);
+        updateThrowingStyles();
+    })();
+</script>
+@endpush

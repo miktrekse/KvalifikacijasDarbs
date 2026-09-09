@@ -53,6 +53,12 @@
                                         {{ $exercise->equipment }}
                                     </span>
                                 @endif
+
+                                @if($exercise->throwing_styles && count($exercise->throwing_styles))
+                                    <span class="flex items-center">
+                                        Throwing: {{ implode(' & ', array_map('ucfirst', $exercise->throwing_styles)) }}
+                                    </span>
+                                @endif
                             </div>
                         </div>
 

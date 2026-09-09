@@ -57,15 +57,7 @@ class User extends Authenticatable
         if (in_array($division, ['MJ18', 'FJ18'], true) && ($age === null || $age >= 18)) return false;
         if ($division === 'MJ15' && ($age === null || $age >= 15)) return false;
 
-        return match ($division) {
-            'MPO' => $rating === null || $rating >= 930,
-            'MA1' => $rating === null || ($rating >= 880 && $rating <= 929),
-            'MA2', 'FA2' => $rating === null || ($rating >= 820 && $rating <= 879),
-            'MA3', 'FA3' => $rating === null || ($rating >= 750 && $rating <= 819),
-            'MA4', 'FA4' => $rating === null || ($rating >= 0 && $rating <= 749),
-            'FPO' => $rating === null || $rating >= 880,
-            default => true,
-        };
+        return true;
     }
 
     public function isAdmin(): bool

@@ -161,9 +161,9 @@
                             @endphp
                             <div class="competition-divisions-grid">
                                 @foreach([
-                                    'MPO' => 'Open · 930+ rating', 'MA1' => '929-880 rating', 'MA2' => '879-820 rating',
-                                    'MA3' => '819-750 rating', 'MA4' => '749-0 rating', 'FPO' => 'Women only · 880+ rating',
-                                    'FA2' => 'Women only · 879-820 rating', 'FA3' => 'Women only · 819-750 rating', 'FA4' => 'Women only · 749-0 rating',
+                                    'MPO' => 'Open · recommended 930+', 'MA1' => 'Recommended 929-880', 'MA2' => 'Recommended 879-820',
+                                    'MA3' => 'Recommended 819-750', 'MA4' => 'Recommended 749-0', 'FPO' => 'Women only · recommended 880+',
+                                    'FA2' => 'Women only · recommended 879-820', 'FA3' => 'Women only · recommended 819-750', 'FA4' => 'Women only · recommended 749-0',
                                     'MP60' => 'Age 60+', 'MP50' => 'Age 50+', 'MP40' => 'Age 40+',
                                     'FP40' => 'Women only · age 40+', 'MJ18' => 'Boys · under 18', 'MJ15' => 'Boys · under 15', 'FJ18' => 'Girls · under 18'
                                 ] as $division => $threshold)
@@ -173,7 +173,7 @@
                                     </label>
                                 @endforeach
                             </div>
-                            <p class="mt-1 text-sm text-gray-500">Select all divisions available. Gender, age, and rating requirements should be checked when registering.</p>
+                            <p class="mt-1 text-sm text-gray-500">Ratings are recommendations only. Gender and age requirements still apply where shown.</p>
                             @error('divisions')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror

@@ -22,6 +22,12 @@
 }
 
 @layer components {
+    .exercise-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin-top: 0.35rem; }
+    .exercise-choice { display: flex; align-items: center; gap: 0.55rem; min-height: 2.7rem; padding: 0.55rem 0.7rem; border: 1px solid #d1d5db; border-radius: 0.45rem; background: #fff; cursor: pointer; }
+    .exercise-choice:hover { border-color: #6366f1; background: #f5f3ff; }
+    .exercise-choice input { width: 1rem; height: 1rem; accent-color: #4f46e5; }
+    .exercise-choice input:disabled + span { color: #9ca3af; }
+    @media (max-width: 640px) { .exercise-choice-grid { grid-template-columns: 1fr; } }
     .competition-divisions-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
     .competition-division-option { display: flex; align-items: center; gap: 0.6rem; min-height: 3rem; padding: 0.55rem 0.65rem; border: 1px solid #e1e6e1; border-radius: 0.35rem; background: #fbfdfb; cursor: pointer; }
     .competition-division-option:hover { border-color: #176b67; background: #f0f8f2; }

@@ -37,6 +37,10 @@ class ExerciseController extends Controller
             'difficulty' => 'required|in:beginner,intermediate,advanced,expert',
             'duration_minutes' => 'nullable|integer|min:1|max:480',
             'equipment' => 'nullable|string|max:255',
+            'equipment_options' => 'nullable|array',
+            'equipment_options.*' => 'in:putters,midranges,fairway-drivers,distance-drivers',
+            'throwing_styles' => 'nullable|array',
+            'throwing_styles.*' => 'in:backhand,forehand',
             'tags_input' => 'nullable|string',
             'is_public' => 'boolean',
         ]);
@@ -47,6 +51,15 @@ class ExerciseController extends Controller
             $tags = array_filter($tags);
         }
 
+        $category = !empty($validated['category_id']) ? Category::find($validated['category_id']) : null;
+        $throwingStyles = $validated['throwing_styles'] ?? [];
+        if ($category && strtolower($category->name) === 'putting') {
+            $throwingStyles = [];
+        }
+        $equipment = !empty($validated['equipment_options'])
+            ? implode(', ', $validated['equipment_options'])
+            : ($validated['equipment'] ?? null);
+
         $exercise = Exercise::create([
             'user_id' => Auth::id(),
             'title' => $validated['title'],
@@ -55,7 +68,8 @@ class ExerciseController extends Controller
             'category_id' => $validated['category_id'] ?? null,
             'difficulty' => $validated['difficulty'],
             'duration_minutes' => $validated['duration_minutes'] ?? null,
-            'equipment' => $validated['equipment'] ?? null,
+            'equipment' => $equipment,
+            'throwing_styles' => $throwingStyles,
             'tags' => $tags,
             'is_public' => $request->boolean('is_public', true),
         ]);
@@ -113,6 +127,10 @@ class ExerciseController extends Controller
             'difficulty' => 'required|in:beginner,intermediate,advanced,expert',
             'duration_minutes' => 'nullable|integer|min:1|max:480',
             'equipment' => 'nullable|string|max:255',
+            'equipment_options' => 'nullable|array',
+            'equipment_options.*' => 'in:putters,midranges,fairway-drivers,distance-drivers',
+            'throwing_styles' => 'nullable|array',
+            'throwing_styles.*' => 'in:backhand,forehand',
             'tags_input' => 'nullable|string',
             'is_public' => 'boolean',
         ]);
@@ -123,6 +141,15 @@ class ExerciseController extends Controller
             $tags = array_filter($tags);
         }
 
+        $category = !empty($validated['category_id']) ? Category::find($validated['category_id']) : null;
+        $throwingStyles = $validated['throwing_styles'] ?? [];
+        if ($category && strtolower($category->name) === 'putting') {
+            $throwingStyles = [];
+        }
+        $equipment = array_key_exists('equipment_options', $validated)
+            ? implode(', ', $validated['equipment_options'] ?? [])
+            : ($validated['equipment'] ?? null);
+
         $exercise->update([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -130,7 +157,8 @@ class ExerciseController extends Controller
             'category_id' => $validated['category_id'] ?? null,
             'difficulty' => $validated['difficulty'],
             'duration_minutes' => $validated['duration_minutes'] ?? null,
-            'equipment' => $validated['equipment'] ?? null,
+            'equipment' => $equipment,
+            'throwing_styles' => $throwingStyles,
             'tags' => $tags,
             'is_public' => $request->boolean('is_public', true),
         ]);
