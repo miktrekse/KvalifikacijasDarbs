@@ -177,6 +177,28 @@
                             @error('divisions')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror
+                            <div class="mt-4 border-t border-gray-200 pt-4">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div>
+                                        <h4 class="font-semibold text-gray-800">Custom divisions</h4>
+                                        <p class="text-xs text-gray-500">Create your own division name and eligibility rules.</p>
+                                    </div>
+                                    <button type="button" id="add-division-rule" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800">+ Add division</button>
+                                </div>
+                                @php $customDivisionRules = old('division_rules', $competition->division_rules ?? []); @endphp
+                                <div id="division-rules" class="mt-3 space-y-3">
+                                    @foreach($customDivisionRules as $index => $rule)
+                                        <div class="competition-division-rule">
+                                            <input name="division_rules[{{ $index }}][name]" value="{{ $index }}" maxlength="40" required placeholder="Division name">
+                                            <select name="division_rules[{{ $index }}][gender]"><option value="any" {{ ($rule['gender'] ?? 'any') === 'any' ? 'selected' : '' }}>Any gender</option><option value="male" {{ ($rule['gender'] ?? '') === 'male' ? 'selected' : '' }}>Male only</option><option value="female" {{ ($rule['gender'] ?? '') === 'female' ? 'selected' : '' }}>Female only</option></select>
+                                            <input type="number" name="division_rules[{{ $index }}][min_age]" value="{{ $rule['min_age'] ?? '' }}" min="0" max="120" placeholder="Min age">
+                                            <input type="number" name="division_rules[{{ $index }}][max_age]" value="{{ $rule['max_age'] ?? '' }}" min="0" max="120" placeholder="Max age">
+                                            <input type="number" name="division_rules[{{ $index }}][min_rating]" value="{{ $rule['min_rating'] ?? '' }}" min="0" max="1100" placeholder="Recommended rating">
+                                            <button type="button" class="remove-division-rule" aria-label="Remove division">&times;</button>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -262,7 +284,7 @@
     (() => {
         const type = document.getElementById('competition_type');
         const format = document.getElementById('format');
-        const selectedFormat = @json(old('format', $competition->format));
+        const selectedFormat = "{{ old('format', $competition->format) }}";
         const formats = {
             singles: [['stroke_play', 'Stroke Play'], ['match_play', 'Match Play'], ['stableford', 'Stableford']],
             doubles: [['doubles_match_play', 'Doubles Match Play'], ['doubles_best_disc', 'Best Disc'], ['doubles_team', 'Team Competition']]
@@ -274,6 +296,17 @@
         }
         type.addEventListener('change', updateFormats);
         updateFormats();
+        const divisionRules = document.getElementById('division-rules');
+        let divisionRuleIndex = Number("{{ count($customDivisionRules) }}");
+        document.getElementById('add-division-rule').addEventListener('click', () => {
+            const row = document.createElement('div');
+            row.className = 'competition-division-rule';
+            row.innerHTML = `<input name="division_rules[${divisionRuleIndex}][name]" placeholder="Division name" maxlength="40" required><select name="division_rules[${divisionRuleIndex}][gender]"><option value="any">Any gender</option><option value="male">Male only</option><option value="female">Female only</option></select><input type="number" name="division_rules[${divisionRuleIndex}][min_age]" min="0" max="120" placeholder="Min age"><input type="number" name="division_rules[${divisionRuleIndex}][max_age]" min="0" max="120" placeholder="Max age"><input type="number" name="division_rules[${divisionRuleIndex}][min_rating]" min="0" max="1100" placeholder="Recommended rating"><button type="button" class="remove-division-rule" aria-label="Remove division">&times;</button>`;
+            row.querySelector('.remove-division-rule').addEventListener('click', () => row.remove());
+            divisionRules.appendChild(row);
+            divisionRuleIndex++;
+        });
+        document.querySelectorAll('.remove-division-rule').forEach(button => button.addEventListener('click', () => button.parentElement.remove()));
     })();
 </script>
 @endpush

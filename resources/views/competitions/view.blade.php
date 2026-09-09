@@ -177,7 +177,19 @@
                                 $divisions = is_array($competition->divisions) ? $competition->divisions : json_decode($competition->divisions, true) ?? [];
                             @endphp
                             @foreach($divisions as $division)
-                                <span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">{{ trim($division) }}</span>
+                                @php $rule = ($competition->division_rules ?? [])[$division] ?? null; @endphp
+                                <span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
+                                    {{ trim($division) }}
+                                    @if($rule)
+                                        · {{ $rule['gender'] !== 'any' ? ucfirst($rule['gender']) : 'Any' }}
+                                        @if($rule['min_age'] !== null || $rule['max_age'] !== null)
+                                            · age {{ $rule['min_age'] ?? 0 }}-{{ $rule['max_age'] ?? 'up' }}
+                                        @endif
+                                        @if($rule['min_rating'] !== null)
+                                            · rating {{ $rule['min_rating'] }}+
+                                        @endif
+                                    @endif
+                                </span>
                             @endforeach
                         </div>
                     </div>
@@ -254,7 +266,7 @@
 </div>
 
 @auth
-<div id="registration-modal" data-open="{{ $errors->has('division') || $errors->has('phone') ? 'true' : 'false' }}" class="fixed inset-0 z-50 hidden items-center justify-center bg-gray-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="registration-modal-title">
+<div id="registration-modal" data-open="{{ $errors->has('division') || $errors->has('phone') || $errors->has('rating') ? 'true' : 'false' }}" class="fixed inset-0 z-50 hidden items-center justify-center bg-gray-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="registration-modal-title">
     <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
         <div class="flex items-start justify-between gap-4">
             <div>
@@ -270,7 +282,8 @@
                 <select name="division" id="registration-division" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
                     <option value="">Select a division</option>
                     @foreach($competition->divisionsArray as $division)
-                        <option value="{{ $division }}" {{ old('division') === $division ? 'selected' : '' }}>{{ $division }}</option>
+                        @php $rule = ($competition->division_rules ?? [])[$division] ?? null; @endphp
+                        <option value="{{ $division }}" {{ old('division') === $division ? 'selected' : '' }}>{{ $division }}{{ $rule && $rule['gender'] !== 'any' ? ' · ' . ucfirst($rule['gender']) . ' only' : '' }}{{ $rule && ($rule['min_age'] !== null || $rule['max_age'] !== null) ? ' · age ' . ($rule['min_age'] ?? 0) . '-' . ($rule['max_age'] ?? 'up') : '' }}{{ $rule && $rule['min_rating'] !== null ? ' · rating ' . $rule['min_rating'] . '+' : '' }}</option>
                     @endforeach
                 </select>
                 @error('division')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
@@ -279,6 +292,11 @@
                 <label for="registration-phone" class="block text-sm font-medium text-gray-700">Phone number</label>
                 <input type="tel" name="phone" id="registration-phone" value="{{ old('phone') }}" required placeholder="+371 2000 0000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
                 @error('phone')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <div>
+                <label for="registration-rating" class="block text-sm font-medium text-gray-700">Player rating</label>
+                <input type="number" name="rating" id="registration-rating" value="{{ old('rating') }}" min="0" max="1100" placeholder="Optional unless required by the division" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
+                @error('rating')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
             <div class="flex justify-end gap-3 pt-2">
                 <button type="button" id="cancel-registration-modal" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>

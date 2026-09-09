@@ -5,12 +5,35 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Competition;
 use App\Models\CompetitionRegistration;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class CompetitionController extends Controller
 {
+    private function normalizeDivisionRules(array $rules): array
+    {
+        return collect($rules)
+            ->filter(fn (array $rule) => trim($rule['name'] ?? '') !== '')
+            ->mapWithKeys(fn (array $rule) => [trim($rule['name']) => [
+                'gender' => $rule['gender'] ?? 'any',
+                'min_age' => $rule['min_age'] !== '' ? ($rule['min_age'] ?? null) : null,
+                'max_age' => $rule['max_age'] !== '' ? ($rule['max_age'] ?? null) : null,
+                'min_rating' => $rule['min_rating'] !== '' ? ($rule['min_rating'] ?? null) : null,
+            ]])->all();
+    }
+
+    private function userMeetsCustomDivision(User $user, array $rule, ?int $rating = null): bool
+    {
+        $age = $user->age();
+
+        return ($rule['gender'] === 'any' || $user->gender === $rule['gender'])
+            && ($rule['min_age'] === null || ($age !== null && $age >= $rule['min_age']))
+            && ($rule['max_age'] === null || ($age !== null && $age <= $rule['max_age']))
+            && ($rule['min_rating'] === null || ($rating !== null && $rating >= $rule['min_rating']));
+    }
+
     public function index(Request $request)
     {
         $query = Competition::with('user');
@@ -57,6 +80,12 @@ class CompetitionController extends Controller
             'divisions' => 'nullable|string',
             'division_options' => 'nullable|array',
             'division_options.*' => 'in:MPO,MA1,MA2,MA3,MA4,FPO,FA2,FA3,FA4,MP60,MP50,MP40,FP40,MJ18,MJ15,FJ18',
+            'division_rules' => 'nullable|array',
+            'division_rules.*.name' => 'required|string|max:40',
+            'division_rules.*.gender' => 'required|in:any,male,female',
+            'division_rules.*.min_age' => 'nullable|integer|min:0|max:120',
+            'division_rules.*.max_age' => 'nullable|integer|min:0|max:120',
+            'division_rules.*.min_rating' => 'nullable|integer|min:0|max:1100',
             'holes' => 'required|integer|min:1|max:99',
             'entry_fee' => 'nullable|numeric|min:0',
             'currency' => 'nullable|string|size:3',
@@ -71,6 +100,8 @@ class CompetitionController extends Controller
             $divisions = array_map('trim', explode(',', $validated['divisions']));
             $divisions = array_filter($divisions);
         }
+        $divisionRules = $this->normalizeDivisionRules($validated['division_rules'] ?? []);
+        $divisions = array_values(array_unique(array_merge($divisions, array_keys($divisionRules))));
 
         Competition::create([
             'user_id' => Auth::id(),
@@ -82,6 +113,7 @@ class CompetitionController extends Controller
             'format' => $validated['format'],
             'competition_type' => $validated['competition_type'],
             'divisions' => json_encode($divisions),
+            'division_rules' => $divisionRules,
             'holes' => $validated['holes'],
             'entry_fee' => $validated['entry_fee'] ?? 0,
             'currency' => $validated['currency'] ?? 'EUR',
@@ -119,6 +151,7 @@ class CompetitionController extends Controller
         $validated = $request->validate([
             'division' => ['required', Rule::in($divisionOptions)],
             'phone' => ['required', 'string', 'min:7', 'max:40', 'regex:/^[0-9+() .-]+$/'],
+            'rating' => ['nullable', 'integer', 'min:0', 'max:1100'],
         ]);
 
         if ($competition->max_participants && $competition->registrations->count() >= $competition->max_participants) {
@@ -129,9 +162,14 @@ class CompetitionController extends Controller
             return back()->withErrors(['division' => 'Your profile does not meet this division\'s age or gender requirements.'])->withInput();
         }
 
+        $rule = ($competition->division_rules ?? [])[$validated['division']] ?? null;
+        if ($rule && !$this->userMeetsCustomDivision($request->user(), $rule, $validated['rating'] ?? null)) {
+            return back()->withErrors(['division' => 'Your profile does not meet this custom division\'s requirements.'])->withInput();
+        }
+
         CompetitionRegistration::updateOrCreate(
             ['competition_id' => $competition->id, 'user_id' => $request->user()->id],
-            ['division' => $validated['division'], 'phone' => $validated['phone']]
+            ['division' => $validated['division'], 'phone' => $validated['phone'], 'rating' => $validated['rating'] ?? null]
         );
 
         return back()->with('success', 'You are registered for the competition.');
@@ -169,6 +207,12 @@ class CompetitionController extends Controller
             'divisions' => 'nullable|string',
             'division_options' => 'nullable|array',
             'division_options.*' => 'in:MPO,MA1,MA2,MA3,MA4,FPO,FA2,FA3,FA4,MP60,MP50,MP40,FP40,MJ18,MJ15,FJ18',
+            'division_rules' => 'nullable|array',
+            'division_rules.*.name' => 'required|string|max:40',
+            'division_rules.*.gender' => 'required|in:any,male,female',
+            'division_rules.*.min_age' => 'nullable|integer|min:0|max:120',
+            'division_rules.*.max_age' => 'nullable|integer|min:0|max:120',
+            'division_rules.*.min_rating' => 'nullable|integer|min:0|max:1100',
             'holes' => 'required|integer|min:1|max:99',
             'entry_fee' => 'nullable|numeric|min:0',
             'currency' => 'nullable|string|size:3',
@@ -185,6 +229,8 @@ class CompetitionController extends Controller
             $divisions = array_map('trim', explode(',', $validated['divisions']));
             $divisions = array_filter($divisions);
         }
+        $divisionRules = $this->normalizeDivisionRules($validated['division_rules'] ?? []);
+        $divisions = array_values(array_unique(array_merge($divisions, array_keys($divisionRules))));
 
         $competition->update([
             'name' => $validated['name'],
@@ -195,6 +241,7 @@ class CompetitionController extends Controller
             'format' => $validated['format'],
             'competition_type' => $validated['competition_type'],
             'divisions' => json_encode($divisions),
+            'division_rules' => $divisionRules,
             'holes' => $validated['holes'],
             'entry_fee' => $validated['entry_fee'] ?? 0,
             'currency' => $validated['currency'] ?? 'EUR',

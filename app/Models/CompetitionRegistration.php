@@ -15,6 +15,7 @@ class CompetitionRegistration extends Model
         'user_id',
         'division',
         'phone',
+        'rating',
     ];
 
     public function competition(): BelongsTo

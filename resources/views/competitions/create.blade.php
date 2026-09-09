@@ -176,6 +176,16 @@
                             @error('divisions')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror
+                            <div class="mt-4 border-t border-gray-200 pt-4">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div>
+                                        <h4 class="font-semibold text-gray-800">Custom divisions</h4>
+                                        <p class="text-xs text-gray-500">Create your own division name and eligibility rules.</p>
+                                    </div>
+                                    <button type="button" id="add-division-rule" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800">+ Add division</button>
+                                </div>
+                                <div id="division-rules" class="mt-3 space-y-3"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -364,6 +374,17 @@
         }
         type.addEventListener('change', updateFormats);
         updateFormats();
+        const divisionRules = document.getElementById('division-rules');
+        let divisionRuleIndex = 0;
+        function addDivisionRule() {
+            const row = document.createElement('div');
+            row.className = 'competition-division-rule';
+            row.innerHTML = `<input name="division_rules[${divisionRuleIndex}][name]" placeholder="Division name" maxlength="40" required><select name="division_rules[${divisionRuleIndex}][gender]"><option value="any">Any gender</option><option value="male">Male only</option><option value="female">Female only</option></select><input type="number" name="division_rules[${divisionRuleIndex}][min_age]" min="0" max="120" placeholder="Min age"><input type="number" name="division_rules[${divisionRuleIndex}][max_age]" min="0" max="120" placeholder="Max age"><input type="number" name="division_rules[${divisionRuleIndex}][min_rating]" min="0" max="1100" placeholder="Recommended rating"><button type="button" class="remove-division-rule" aria-label="Remove division">&times;</button>`;
+            row.querySelector('.remove-division-rule').addEventListener('click', () => row.remove());
+            divisionRules.appendChild(row);
+            divisionRuleIndex++;
+        }
+        document.getElementById('add-division-rule').addEventListener('click', addDivisionRule);
         setTimeout(() => map.invalidateSize(), 100);
         requestNearbyCourses();
     })();
