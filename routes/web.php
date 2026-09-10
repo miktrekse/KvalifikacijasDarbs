@@ -5,6 +5,7 @@ use App\Http\Controllers\CompetitionController;
 use App\Http\Controllers\CourseController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExerciseController;
+use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -21,6 +22,9 @@ Route::middleware('guest')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/profile', fn (\Illuminate\Http\Request $request) => redirect()->route('profile.show', $request->user()))->name('profile.edit');
+    Route::get('/profiles/{user}', [ProfileController::class, 'show'])->name('profile.show');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 
     Route::get('/exercises/index', [ExerciseController::class, 'index'])->name('exercises.index');
     Route::get('/exercises/saved', [ExerciseController::class, 'saved'])->name('exercises.saved');

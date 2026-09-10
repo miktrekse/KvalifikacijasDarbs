@@ -3,6 +3,25 @@
 @section('title', $competition->name)
 
 @section('content')
+@auth
+@php
+    $registrationDivisions = collect($competition->divisionsArray)->filter(function ($division) use ($competition) {
+        if (!Auth::user()->meetsDivisionAgeGenderRequirements($division)) {
+            return false;
+        }
+
+        $rule = ($competition->division_rules ?? [])[$division] ?? null;
+        if (!$rule) {
+            return true;
+        }
+
+        $age = Auth::user()->age();
+        return ($rule['gender'] === 'any' || $rule['gender'] === Auth::user()->gender)
+            && ($rule['min_age'] === null || ($age !== null && $age >= $rule['min_age']))
+            && ($rule['max_age'] === null || ($age !== null && $age <= $rule['max_age']));
+    })->values();
+@endphp
+@endauth
 <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
     <div class="mb-6">
         <a href="{{ route('competitions.index') }}" class="text-blue-600 hover:text-blue-800 flex items-center">
@@ -129,11 +148,15 @@
                         @foreach($competition->registrations as $registration)
                             <div class="flex items-center justify-between gap-4 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
                                 <div class="flex min-w-0 items-center gap-3">
-                                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700">
-                                        {{ strtoupper(substr($registration->user->name, 0, 1)) }}
-                                    </div>
+                                    <a href="{{ route('profile.show', $registration->user) }}" class="shrink-0">
+                                        @if($registration->user->avatar)
+                                            <img src="{{ Storage::disk('public')->url($registration->user->avatar) }}" alt="{{ $registration->user->name }}" class="h-9 w-9 rounded-full object-cover">
+                                        @else
+                                            <span class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700">{{ strtoupper(substr($registration->user->name, 0, 1)) }}</span>
+                                        @endif
+                                    </a>
                                     <div class="min-w-0">
-                                        <p class="truncate font-semibold text-gray-800">{{ $registration->user->name }}</p>
+                                        <a href="{{ route('profile.show', $registration->user) }}" class="truncate font-semibold text-gray-800 hover:text-indigo-700">{{ $registration->user->name }}</a>
                                         <p class="text-sm text-gray-500">{{ $registration->division }}</p>
                                     </div>
                                 </div>
@@ -222,13 +245,15 @@
                 @endif
 
                 @auth
-                    @if($competition->status === 'upcoming' && (!$competition->max_participants || $competition->registrations->count() < $competition->max_participants))
+                    @if($competition->status === 'upcoming' && $registrationDivisions->isNotEmpty() && (!$competition->max_participants || $competition->registrations->count() < $competition->max_participants))
                         <button type="button" id="open-registration-modal"
                             class="block w-full mb-3 text-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
                             Register for this competition
                         </button>
                     @elseif($competition->max_participants && $competition->registrations->count() >= $competition->max_participants)
                         <p class="mb-3 text-sm text-red-600 text-center">Registration is full.</p>
+                    @elseif($registrationDivisions->isEmpty())
+                        <p class="mb-3 text-sm text-gray-500 text-center">No divisions match your profile.</p>
                     @endif
                 @else
                     <a href="{{ route('login') }}" class="block w-full mb-3 text-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
@@ -281,11 +306,14 @@
                 <label for="registration-division" class="block text-sm font-medium text-gray-700">Division</label>
                 <select name="division" id="registration-division" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
                     <option value="">Select a division</option>
-                    @foreach($competition->divisionsArray as $division)
+                    @foreach($registrationDivisions as $division)
                         @php $rule = ($competition->division_rules ?? [])[$division] ?? null; @endphp
                         <option value="{{ $division }}" {{ old('division') === $division ? 'selected' : '' }}>{{ $division }}{{ $rule && $rule['gender'] !== 'any' ? ' · ' . ucfirst($rule['gender']) . ' only' : '' }}{{ $rule && ($rule['min_age'] !== null || $rule['max_age'] !== null) ? ' · age ' . ($rule['min_age'] ?? 0) . '-' . ($rule['max_age'] ?? 'up') : '' }}{{ $rule && $rule['min_rating'] !== null ? ' · rating ' . $rule['min_rating'] . '+' : '' }}</option>
                     @endforeach
                 </select>
+                @if($registrationDivisions->isEmpty())
+                    <p class="mt-2 text-sm text-red-600">No divisions match your age or gender profile.</p>
+                @endif
                 @error('division')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
             <div>

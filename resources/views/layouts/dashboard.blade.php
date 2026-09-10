@@ -43,7 +43,12 @@
                     
                     <div class="hidden sm:ml-4 sm:flex sm:items-center">
                         <div class="flex items-center space-x-3">
-                            <span class="text-sm text-gray-700">
+                            <a href="{{ route('profile.show', Auth::user()) }}" class="flex items-center gap-2 text-sm text-gray-700 hover:text-indigo-600">
+                                @if(Auth::user()->avatar)
+                                    <img src="{{ Storage::disk('public')->url(Auth::user()->avatar) }}" alt="" class="h-7 w-7 rounded-full object-cover">
+                                @else
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">{{ strtoupper(substr(Auth::user()->name, 0, 1)) }}</span>
+                                @endif
                                 {{ Auth::user()->name }}
                                 @if(Auth::user()->isAdmin())
                                     <span class="ml-1 px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
@@ -54,7 +59,7 @@
                                         User
                                     </span>
                                 @endif
-                            </span>
+                            </a>
                             <form action="{{ route('logout') }}" method="POST">
                                 @csrf
                                 <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">
@@ -86,7 +91,7 @@
                 </a>
                 <div class="border-t border-gray-200 pt-3 mt-2">
                     <div class="px-3 py-2">
-                        <p class="text-sm font-medium text-gray-900">{{ Auth::user()->name }}</p>
+                        <a href="{{ route('profile.show', Auth::user()) }}" class="text-sm font-medium text-gray-900">{{ Auth::user()->name }}</a>
                         <p class="text-xs text-gray-500">
                             @if(Auth::user()->isAdmin())
                                 Admin
