@@ -104,4 +104,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(CompetitionRegistration::class);
     }
+
+    public function trainingRounds(): HasMany
+    {
+        return $this->hasMany(TrainingRound::class);
+    }
+
+    public function trainingRoundsJoined(): BelongsToMany
+    {
+        return $this->belongsToMany(TrainingRound::class, 'training_round_players')->withTimestamps();
+    }
 }

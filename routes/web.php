@@ -6,6 +6,7 @@ use App\Http\Controllers\CourseController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExerciseController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\TrainingRoundController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -54,6 +55,15 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
     Route::get('/courses/data', [CourseController::class, 'data'])->name('courses.data');
+
+    Route::get('/training', [TrainingRoundController::class, 'index'])->name('training.index');
+    Route::get('/training/create', [TrainingRoundController::class, 'create'])->name('training.create');
+    Route::post('/training', [TrainingRoundController::class, 'store'])->name('training.store');
+    Route::get('/training/players/search', [TrainingRoundController::class, 'searchPlayers'])->name('training.players.search');
+    Route::get('/training/{round}', [TrainingRoundController::class, 'show'])->name('training.show');
+    Route::post('/training/{round}/complete', [TrainingRoundController::class, 'complete'])->name('training.complete');
+    Route::post('/training/{round}/holes/{hole}/shots', [TrainingRoundController::class, 'addShot'])->name('training.shots.store');
+    Route::post('/training/{round}/holes/{hole}/shots/undo', [TrainingRoundController::class, 'undoShot'])->name('training.shots.undo');
 });
 
 Route::middleware(['auth'])->group(function () {

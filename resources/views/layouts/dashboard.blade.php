@@ -29,6 +29,9 @@
                         <a href="/competitions" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                             Competitions
                         </a>
+                        <a href="{{ route('training.index') }}" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Training Rounds
+                        </a>
                         <a href="{{ route('courses.index') }}" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                             Courses Map
                         </a>
@@ -45,7 +48,7 @@
                         <div class="flex items-center space-x-3">
                             <a href="{{ route('profile.show', Auth::user()) }}" class="flex items-center gap-2 text-sm text-gray-700 hover:text-indigo-600">
                                 @if(Auth::user()->avatar)
-                                    <img src="{{ Storage::disk('public')->url(Auth::user()->avatar) }}" alt="" class="h-7 w-7 rounded-full object-cover">
+                                    <img src="{{ asset('storage/' . Auth::user()->avatar) }}" alt="" class="h-7 w-7 rounded-full object-cover">
                                 @else
                                     <span class="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">{{ strtoupper(substr(Auth::user()->name, 0, 1)) }}</span>
                                 @endif
@@ -85,6 +88,9 @@
                 </a>
                 <a href="/competitions" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
                     Competitions
+                </a>
+                <a href="{{ route('training.index') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+                    Training Rounds
                 </a>
                 <a href="{{ route('courses.index') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
                     Courses Map

@@ -10,7 +10,7 @@
             <div class="-mt-14 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div class="flex items-end gap-4">
                     @if($user->avatar)
-                        <img src="{{ Storage::disk('public')->url($user->avatar) }}" alt="{{ $user->name }}" class="h-28 w-28 rounded-2xl border-4 border-white object-cover shadow-lg">
+                        <img src="{{ asset('storage/' . $user->avatar) }}" alt="{{ $user->name }}" class="h-28 w-28 rounded-2xl border-4 border-white object-cover shadow-lg">
                     @else
                         <div class="flex h-28 w-28 items-center justify-center rounded-2xl border-4 border-white bg-indigo-100 text-4xl font-bold text-indigo-700 shadow-lg">{{ strtoupper(substr($user->name, 0, 1)) }}</div>
                     @endif

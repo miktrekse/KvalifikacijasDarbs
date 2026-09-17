@@ -150,7 +150,7 @@
                                 <div class="flex min-w-0 items-center gap-3">
                                     <a href="{{ route('profile.show', $registration->user) }}" class="shrink-0">
                                         @if($registration->user->avatar)
-                                            <img src="{{ Storage::disk('public')->url($registration->user->avatar) }}" alt="{{ $registration->user->name }}" class="h-9 w-9 rounded-full object-cover">
+                                            <img src="{{ asset('storage/' . $registration->user->avatar) }}" alt="{{ $registration->user->name }}" class="h-9 w-9 rounded-full object-cover">
                                         @else
                                             <span class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700">{{ strtoupper(substr($registration->user->name, 0, 1)) }}</span>
                                         @endif
