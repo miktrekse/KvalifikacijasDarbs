@@ -45,6 +45,7 @@
                         <input type="hidden" name="course_lat" id="course_lat" value="{{ old('course_lat') }}">
                         <input type="hidden" name="course_lon" id="course_lon" value="{{ old('course_lon') }}">
                         <input type="hidden" name="course_locality" id="course_locality" value="{{ old('course_locality') }}">
+                        <input type="hidden" name="holes_data" id="holes_data" value="{{ old('holes_data') }}">
 
                         <div class="sm:col-span-2 competition-course-picker">
                             <div class="competition-course-picker__heading">
@@ -88,6 +89,8 @@
                                 class="w-full rounded-lg border-gray-300 border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             <p class="mt-1 text-xs text-gray-500">Can't find basket details online? Every hole starts as a Par 3, 100m &mdash; you can still play it your way.</p>
                         </div>
+
+                        <div class="sm:col-span-2 training-layout-picker" id="training-layout-picker" hidden></div>
                     </div>
                 </div>
 
@@ -154,7 +157,46 @@
             document.getElementById('course_lon').value = course.lon;
             document.getElementById('course_locality').value = course.address || course.locality || '';
             if (course.holes) document.getElementById('holes_count').value = course.holes;
+            renderLayoutPicker(course.layouts || []);
             map.flyTo([course.lat, course.lon], 13, { duration: 0.6 });
+        }
+
+        function applyLayout(layout) {
+            document.getElementById('holes_count').value = layout.holes_count;
+            document.getElementById('holes_data').value = JSON.stringify((layout.hole_details || []).map(hole => ({
+                number: hole.number,
+                par: hole.par,
+                distance_m: hole.length_m,
+            })));
+            const summary = document.getElementById('training-layout-summary');
+            if (summary) summary.textContent = `${layout.holes_count} holes · Par ${layout.par}`;
+        }
+
+        function renderLayoutPicker(layouts) {
+            const container = document.getElementById('training-layout-picker');
+            if (!layouts.length) {
+                container.hidden = true;
+                container.innerHTML = '';
+                document.getElementById('holes_data').value = '';
+                return;
+            }
+
+            container.hidden = false;
+            const tabs = layouts.length > 1
+                ? `<div class="training-layout-picker__tabs">${layouts.map((layout, i) => `<button type="button" class="training-layout-picker__tab${i === 0 ? ' is-active' : ''}" data-layout-index="${i}">${escapeHtml(layout.name)}</button>`).join('')}</div>`
+                : `<p class="training-layout-picker__single">${escapeHtml(layouts[0].name)}</p>`;
+            container.innerHTML = `<span class="training-layout-picker__label">Verified layout &mdash; real par &amp; distances will be used</span>${tabs}<p class="training-layout-picker__summary" id="training-layout-summary"></p>`;
+
+            const tabButtons = [...container.querySelectorAll('.training-layout-picker__tab')];
+            tabButtons.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabButtons.forEach(t => t.classList.remove('is-active'));
+                    tab.classList.add('is-active');
+                    applyLayout(layouts[Number(tab.dataset.layoutIndex)]);
+                });
+            });
+
+            applyLayout(layouts[0]);
         }
 
         function renderCourses() {

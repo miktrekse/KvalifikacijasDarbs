@@ -43,6 +43,7 @@ class TrainingRoundController extends Controller
             'course_lon' => 'nullable|numeric|between:-180,180',
             'course_locality' => 'nullable|string|max:255',
             'holes_count' => 'required|integer|min:1|max:36',
+            'holes_data' => 'nullable|string',
             'player_ids' => 'nullable|array',
             'player_ids.*' => 'integer|exists:users,id',
         ]);
@@ -60,13 +61,16 @@ class TrainingRoundController extends Controller
         $playerIds = array_values(array_unique(array_merge([Auth::id()], $validated['player_ids'] ?? [])));
         $round->players()->attach($playerIds);
 
+        $layoutHoles = $this->parseLayoutHoles($validated['holes_data'] ?? null);
+
         $holes = [];
         for ($number = 1; $number <= $validated['holes_count']; $number++) {
+            $holeData = $layoutHoles->get($number);
             $holes[] = [
                 'training_round_id' => $round->id,
                 'number' => $number,
-                'par' => 3,
-                'distance_m' => 100,
+                'par' => $holeData['par'] ?? 3,
+                'distance_m' => $holeData['distance_m'] ?? 100,
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
@@ -75,6 +79,29 @@ class TrainingRoundController extends Controller
 
         return redirect()->route('training.show', $round->id)
             ->with('success', 'Training round started! Log your shots hole by hole.');
+    }
+
+    private function parseLayoutHoles(?string $holesData): \Illuminate\Support\Collection
+    {
+        if (!$holesData) {
+            return collect();
+        }
+
+        $decoded = json_decode($holesData, true);
+        if (!is_array($decoded)) {
+            return collect();
+        }
+
+        return collect($decoded)
+            ->filter(fn ($hole) => is_array($hole) && isset($hole['number'], $hole['par']) && is_numeric($hole['number']) && is_numeric($hole['par']))
+            ->mapWithKeys(fn (array $hole) => [
+                (int) $hole['number'] => [
+                    'par' => max(1, min(10, (int) $hole['par'])),
+                    'distance_m' => isset($hole['distance_m']) && is_numeric($hole['distance_m'])
+                        ? max(1, min(2000, (int) $hole['distance_m']))
+                        : 100,
+                ],
+            ]);
     }
 
     public function show(TrainingRound $round)
