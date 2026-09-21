@@ -116,7 +116,7 @@
             const marker = L.circleMarker([course.lat, course.lon], {
                 radius: 8, color: '#f6f2e9', weight: 3, fillColor: '#e4572e', fillOpacity: 1
             }).addTo(markerLayer);
-            marker.bindPopup(coursePopup(course), { maxWidth: 290, minWidth: 240, className: 'course-popup' });
+            marker.bindPopup(coursePopup(course), { maxWidth: 320, minWidth: 240, maxHeight: 420, className: 'course-popup' });
 
             const item = document.createElement('button');
             item.type = 'button';
@@ -155,9 +155,65 @@
             : '';
         const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${course.name} ${course.lat},${course.lon}`)}`;
         const googleLink = `<a class="course-popup__google-link" href="${googleMapsUrl}" target="_blank" rel="noopener">Check Google Maps reviews <span>↗</span></a>`;
+        const parStat = course.par ? `<span><b>${escapeHtml(course.par)}</b><small>PAR</small></span>` : '';
+        const verifiedBadge = course.curated ? '<span class="course-popup__verified">✓ Verified stats</span>' : '';
+        const holesSection = layoutsSection(course);
 
-        return `<div class="course-popup__body"><span class="course-popup__eyebrow">DISC GOLF COURSE</span><strong class="course-popup__title">${escapeHtml(course.name)}</strong><span class="course-popup__location">${escapeHtml(location)}</span>${address}${phone}<div class="course-popup__stats"><span><b>${holes}</b><small>LAYOUT</small></span><span><b>${escapeHtml(course.country_code)}</b><small>REGION</small></span></div>${details ? `<div class="course-popup__details">${details}</div>` : ''}<div class="course-popup__actions">${googleLink}${website}${osmLink}</div></div>`;
+        return `<div class="course-popup__body"><span class="course-popup__eyebrow">DISC GOLF COURSE</span><strong class="course-popup__title">${escapeHtml(course.name)}</strong><span class="course-popup__location">${escapeHtml(location)}</span>${verifiedBadge}${address}${phone}<div class="course-popup__stats"><span><b>${holes}</b><small>LAYOUT</small></span>${parStat}<span><b>${escapeHtml(course.country_code)}</b><small>REGION</small></span></div>${details ? `<div class="course-popup__details">${details}</div>` : ''}${holesSection}<div class="course-popup__actions">${googleLink}${website}${osmLink}</div></div>`;
     }
+
+    function layoutsSection(course) {
+        const layouts = course.layouts || [];
+        if (!layouts.length) return '';
+
+        const tabs = layouts.length > 1
+            ? `<div class="course-popup__layout-tabs">${layouts.map((layout, i) => `<button type="button" class="course-popup__layout-tab${i === 0 ? ' is-active' : ''}" data-layout-index="${i}">${escapeHtml(layout.name)}</button>`).join('')}</div>`
+            : '';
+        const panels = layouts.map((layout, i) => `<div class="course-popup__layout-panel" data-layout-panel="${i}"${i === 0 ? '' : ' hidden'}>${holesTable(layout)}</div>`).join('');
+
+        return `<div class="course-popup__holes"><span class="course-popup__holes-title">Hole-by-hole</span>${tabs}${panels}</div>`;
+    }
+
+    function holesTable(layout) {
+        const holeDetails = layout.hole_details || [];
+        if (!holeDetails.length) return '<p class="course-popup__holes-empty">No hole data available for this layout.</p>';
+
+        const rows = holeDetails.map(hole => `<tr><td>${escapeHtml(hole.number ?? '—')}</td><td>${escapeHtml(hole.par ?? '—')}</td><td>${hole.length_m ? `${escapeHtml(hole.length_m)} m` : '—'}</td></tr>`).join('');
+        return `<table class="course-popup__holes-table"><thead><tr><th>Hole</th><th>Par</th><th>Length</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function resizePopupContent(popupElement, maxHeight) {
+        const contentNode = popupElement ? popupElement.querySelector('.leaflet-popup-content') : null;
+        if (!contentNode || !maxHeight) return;
+        contentNode.style.height = '';
+        if (contentNode.scrollHeight > maxHeight) {
+            contentNode.style.height = maxHeight + 'px';
+            contentNode.classList.add('leaflet-popup-scrolled');
+        } else {
+            contentNode.classList.remove('leaflet-popup-scrolled');
+        }
+    }
+
+    map.on('popupopen', (event) => {
+        const popupElement = event.popup.getElement();
+        const container = popupElement ? popupElement.querySelector('.course-popup__holes') : null;
+        if (!container || container.dataset.bound) return;
+        container.dataset.bound = 'true';
+
+        const tabs = [...container.querySelectorAll('.course-popup__layout-tab')];
+        tabs.forEach(tab => {
+            L.DomEvent.disableClickPropagation(tab);
+            tab.addEventListener('click', (clickEvent) => {
+                L.DomEvent.stop(clickEvent);
+                tabs.forEach(t => t.classList.remove('is-active'));
+                tab.classList.add('is-active');
+                container.querySelectorAll('.course-popup__layout-panel').forEach(panel => {
+                    panel.hidden = panel.dataset.layoutPanel !== tab.dataset.layoutIndex;
+                });
+                resizePopupContent(popupElement, event.popup.options.maxHeight);
+            });
+        });
+    });
 
     async function loadCourses(latitude = null, longitude = null) {
         const isNearbySearch = latitude !== null && longitude !== null;

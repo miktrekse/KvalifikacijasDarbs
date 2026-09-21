@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CuratedCourses;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Pool;
@@ -89,20 +90,10 @@ class CourseController extends Controller
                 }
             } else {
                 foreach ($queries as $query) {
-                    $endpoints = ['https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
-                    foreach ($endpoints as $endpoint) {
-                        try {
-                            $response = Http::withHeaders(['User-Agent' => 'DiscStats/1.0'])
-                                ->acceptJson()
-                                ->timeout(35)
-                                ->get($endpoint, ['data' => $query])
-                                ->throw();
-                            $elements = $elements->merge($response->json('elements', []));
-                            $successfulQuery = true;
-                            break;
-                        } catch (RequestException|ConnectionException $exception) {
-                            continue;
-                        }
+                    $result = $this->runOverpassQuery($query);
+                    if ($result !== null) {
+                        $elements = $elements->merge($result);
+                        $successfulQuery = true;
                     }
                 }
             }
@@ -144,6 +135,7 @@ class CourseController extends Controller
                         'surface' => $tags['surface'] ?? null,
                         'wheelchair' => $tags['wheelchair'] ?? null,
                         'holes' => $tags['disc_golf:holes'] ?? null,
+                        'par' => $tags['disc_golf:par'] ?? null,
                         'country_code' => $isNearbySearch ? ($tags['addr:country'] ?? 'Nearby') : $country,
                         'osm_url' => isset($element['type'], $element['id'])
                             ? 'https://www.openstreetmap.org/' . $element['type'] . '/' . $element['id']
@@ -178,6 +170,18 @@ class CourseController extends Controller
                     return $earthRadius * 2 * asin(min(1, sqrt($a))) <= 150000;
                 })
                 ->unique(fn (array $course) => $course['id'])
+                ->map(function (array $course) {
+                    $curated = CuratedCourses::findNear((float) $course['lat'], (float) $course['lon']);
+                    if ($curated) {
+                        $primaryLayout = $curated['layouts'][0];
+                        $course['holes'] = $primaryLayout['holes_count'];
+                        $course['par'] = $primaryLayout['par'];
+                        $course['curated'] = true;
+                        $course['layouts'] = CuratedCourses::layoutsForJson($curated);
+                    }
+
+                    return $course;
+                })
                 ->sortBy(fn (array $course) => $course['distance_km'] ?? PHP_INT_MAX)
                 ->values();
 
@@ -192,5 +196,85 @@ class CourseController extends Controller
                 'message' => 'OpenStreetMap course data is temporarily unavailable.',
             ], 502);
         }
+    }
+
+    public function holes(Request $request)
+    {
+        $latitude = $request->query('lat');
+        $longitude = $request->query('lon');
+
+        if (!is_numeric($latitude) || !is_numeric($longitude)
+            || $latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
+            return response()->json([
+                'message' => 'A valid lat/lon is required.',
+            ], 422);
+        }
+
+        $curated = CuratedCourses::findNear((float) $latitude, (float) $longitude);
+        if ($curated) {
+            return response()->json([
+                'layouts' => CuratedCourses::layoutsForJson($curated),
+                'source' => $curated['source'],
+            ]);
+        }
+
+        $query = '[out:json][timeout:25];'
+            . '(way["disc_golf"="hole"](around:1200,' . $latitude . ',' . $longitude . ');'
+            . 'node["disc_golf"="hole"](around:1200,' . $latitude . ',' . $longitude . '););'
+            . 'out tags center;';
+
+        $elements = $this->runOverpassQuery($query);
+
+        if ($elements === null) {
+            return response()->json([
+                'message' => 'OpenStreetMap hole data is temporarily unavailable.',
+            ], 502);
+        }
+
+        $holes = collect($elements)
+            ->map(function (array $element) {
+                $tags = $element['tags'] ?? [];
+
+                return [
+                    'id' => $element['id'] ?? null,
+                    'number' => $tags['ref'] ?? null,
+                    'par' => $tags['disc_golf:par'] ?? $tags['par'] ?? null,
+                    'length_m' => $tags['disc_golf:length'] ?? $tags['length'] ?? null,
+                    'name' => $tags['name'] ?? null,
+                ];
+            })
+            ->unique(fn (array $hole) => $hole['id'])
+            ->sortBy(fn (array $hole) => is_numeric($hole['number']) ? (int) $hole['number'] : PHP_INT_MAX)
+            ->values();
+
+        $parredHoles = $holes->filter(fn (array $hole) => is_numeric($hole['par']));
+
+        return response()->json([
+            'holes' => $holes,
+            'total' => $holes->count(),
+            'total_par' => $parredHoles->isNotEmpty() ? $parredHoles->sum(fn (array $hole) => (int) $hole['par']) : null,
+            'source' => 'OpenStreetMap',
+        ]);
+    }
+
+    private function runOverpassQuery(string $query): ?array
+    {
+        $endpoints = ['https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+
+        foreach ($endpoints as $endpoint) {
+            try {
+                $response = Http::withHeaders(['User-Agent' => 'DiscStats/1.0'])
+                    ->acceptJson()
+                    ->timeout(35)
+                    ->get($endpoint, ['data' => $query])
+                    ->throw();
+
+                return $response->json('elements', []);
+            } catch (RequestException|ConnectionException $exception) {
+                continue;
+            }
+        }
+
+        return null;
     }
 }

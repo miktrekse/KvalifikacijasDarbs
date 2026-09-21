@@ -171,6 +171,7 @@
     .course-popup__eyebrow { display: block; color: var(--orange); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.12em; }
     .course-popup__title { display: block; margin-top: 0.3rem; font-size: 1.05rem; line-height: 1.15; }
     .course-popup__location { display: block; margin-top: 0.3rem; color: var(--muted); font-size: 0.75rem; }
+    .course-popup__verified { display: inline-block; margin-top: 0.4rem; padding: 0.15rem 0.5rem; border-radius: 999px; background: #e9f5ef; color: #1c7a4f; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.03em; }
     .course-popup__address, .course-popup__phone { display: block; margin-top: 0.35rem; color: var(--muted); font-size: 0.7rem; line-height: 1.3; }
     .course-popup__phone { color: var(--teal); text-decoration: none; }
     .course-popup__stats { display: flex; gap: 1.5rem; margin: 0.9rem 0; padding: 0.7rem 0; border-top: 1px solid #eee8dc; border-bottom: 1px solid #eee8dc; }
@@ -186,6 +187,15 @@
     .course-popup__map-link { margin-top: 0.6rem; color: var(--teal); }
     .course-popup__google-link { color: #3367d6; }
     .course-popup__link span, .course-popup__google-link span { margin-left: 0.25rem; }
+    .course-popup__holes { margin: 0.75rem 0; padding-bottom: 0.75rem; border-bottom: 1px solid #eee8dc; }
+    .course-popup__holes-title { display: block; margin-bottom: 0.4rem; color: var(--muted); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+    .course-popup__holes-empty { margin: 0; color: var(--muted); font-size: 0.68rem; }
+    .course-popup__layout-tabs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.5rem; }
+    .course-popup__layout-tab { padding: 0.2rem 0.55rem; border: 1px solid #eee8dc; border-radius: 999px; background: transparent; color: var(--muted); font-size: 0.62rem; font-weight: 700; cursor: pointer; }
+    .course-popup__layout-tab.is-active { background: var(--teal); border-color: var(--teal); color: #fff; }
+    .course-popup__holes-table { width: 100%; border-collapse: collapse; font-size: 0.68rem; }
+    .course-popup__holes-table th, .course-popup__holes-table td { padding: 0.25rem 0.4rem; text-align: left; border-bottom: 1px solid #eee8dc; }
+    .course-popup__holes-table th { color: var(--muted); font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; font-size: 0.58rem; }
     @media (max-width: 700px) {
         .course-finder__header { display: block; padding: 1.5rem 1rem 1.25rem; }
         .course-finder__status { display: inline-flex; margin-top: 1rem; }

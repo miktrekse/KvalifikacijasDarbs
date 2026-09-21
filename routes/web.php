@@ -55,6 +55,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
     Route::get('/courses/data', [CourseController::class, 'data'])->name('courses.data');
+    Route::get('/courses/holes', [CourseController::class, 'holes'])->name('courses.holes');
 
     Route::get('/training', [TrainingRoundController::class, 'index'])->name('training.index');
     Route::get('/training/create', [TrainingRoundController::class, 'create'])->name('training.create');
