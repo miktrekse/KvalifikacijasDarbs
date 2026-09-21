@@ -71,7 +71,7 @@ class ExerciseController extends Controller
             'equipment' => $equipment,
             'throwing_styles' => $throwingStyles,
             'tags' => $tags,
-            'is_public' => $request->boolean('is_public', true),
+            'is_public' => Auth::user()->canPublish() && $request->boolean('is_public', true),
         ]);
 
         Auth::user()->addedExercises()->attach($exercise->id);
@@ -160,7 +160,7 @@ class ExerciseController extends Controller
             'equipment' => $equipment,
             'throwing_styles' => $throwingStyles,
             'tags' => $tags,
-            'is_public' => $request->boolean('is_public', true),
+            'is_public' => Auth::user()->canPublish() && $request->boolean('is_public', true),
         ]);
 
         return redirect()->route('exercises.view', $exercise->id)

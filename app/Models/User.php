@@ -88,6 +88,34 @@ class User extends Authenticatable
         return $this->role === 'user';
     }
 
+    public const VERIFY_AFTER_COMPETITIONS = 3;
+
+    public function isVerified(): bool
+    {
+        return $this->role === 'verified';
+    }
+
+    /** Verified users and admins may create competitions and publish exercises. */
+    public function canPublish(): bool
+    {
+        return $this->isVerified() || $this->isAdmin();
+    }
+
+    public function completedCompetitionsCount(): int
+    {
+        return $this->competitionRegistrations()
+            ->whereHas('competition', fn ($query) => $query->where('status', 'completed'))
+            ->count();
+    }
+
+    /** Promotes a regular user to verified after enough completed competitions. */
+    public function syncVerification(): void
+    {
+        if ($this->isUser() && $this->completedCompetitionsCount() >= self::VERIFY_AFTER_COMPETITIONS) {
+            $this->update(['role' => 'verified']);
+        }
+    }
+
     public function exercises(): HasMany
     {
         return $this->hasMany(Exercise::class);

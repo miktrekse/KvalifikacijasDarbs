@@ -9,12 +9,14 @@
             <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">DiscStats Competitions</h1>
             <p class="text-gray-600 mt-1 text-sm sm:text-base">Find and register for tournaments</p>
         </div>
+        @if(Auth::user()->canPublish())
         <a href="{{ route('competitions.create') }}" class="inline-flex items-center px-3 py-2 sm:px-4 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm sm:text-base w-full sm:w-auto justify-center">
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
             </svg>
             Create
         </a>
+        @endif
     </div>
 
     <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
@@ -141,9 +143,11 @@
             <h3 class="mt-4 text-lg font-medium text-gray-900">No competitions found</h3>
             <p class="mt-2 text-gray-500">Get started by creating a new competition.</p>
             <div class="mt-6">
+                @if(Auth::user()->canPublish())
                 <a href="{{ route('competitions.create') }}" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
                     Create Competition
                 </a>
+                @endif
             </div>
         </div>
     @endif

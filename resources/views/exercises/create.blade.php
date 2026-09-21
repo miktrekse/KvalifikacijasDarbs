@@ -154,6 +154,7 @@
             <p class="mt-1 text-sm text-gray-500">Separate tags with commas.</p>
         </div>
 
+        @if(Auth::user()->canPublish())
         <div class="mb-6">
             <label class="flex items-center">
                 <input type="checkbox" name="is_public" value="1" 
@@ -163,6 +164,9 @@
             </label>
             <p class="mt-1 text-sm text-gray-500 ml-7">Public exercises can be viewed and saved by all users.</p>
         </div>
+        @else
+        <p class="mb-6 text-sm text-gray-500">This exercise will be visible only to you. Verified users can publish exercises.</p>
+        @endif
 
         <div class="flex items-center justify-end space-x-4">
             <a href="{{ route('exercises.index') }}" class="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">

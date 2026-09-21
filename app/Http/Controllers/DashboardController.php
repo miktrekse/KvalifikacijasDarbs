@@ -15,6 +15,7 @@ class DashboardController extends Controller
     public function index()
     {
         $user = Auth::user();
+        $user->syncVerification();
 
         if ($user->isAdmin()) {
             return redirect()->route('admin.dashboard');
@@ -56,7 +57,7 @@ class DashboardController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:user,admin',
+            'role' => 'required|in:user,verified,admin',
         ]);
 
         User::create([
@@ -87,7 +88,7 @@ class DashboardController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $id,
-            'role' => 'required|in:user,admin',
+            'role' => 'required|in:user,verified,admin',
         ]);
 
         $user->update([

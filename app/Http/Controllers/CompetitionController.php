@@ -62,11 +62,20 @@ class CompetitionController extends Controller
 
     public function create()
     {
+        if (!Auth::user()->canPublish()) {
+            return redirect()->route('competitions.index')
+                ->with('error', 'Only verified users can create competitions. Complete ' . User::VERIFY_AFTER_COMPETITIONS . ' competitions to get verified.');
+        }
+
         return view('competitions.create');
     }
 
     public function store(Request $request)
     {
+        if (!Auth::user()->canPublish()) {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -252,6 +261,11 @@ class CompetitionController extends Controller
             'is_approved' => $request->boolean('is_approved'),
             'is_public' => $request->boolean('is_public', true),
         ]);
+
+        if ($competition->status === 'completed') {
+            $competition->registrations()->with('user')->get()
+                ->each(fn ($registration) => $registration->user?->syncVerification());
+        }
 
         return redirect()->route('competitions.view', $competition->id)
             ->with('success', 'Competition updated successfully!');
