@@ -108,9 +108,46 @@ class TrainingRoundController extends Controller
     {
         $this->abortUnlessParticipant($round);
 
-        $round->load(['players', 'holes.shots.user']);
+        return view('training.show', [
+            'round' => $round,
+            'payload' => $this->scoringPayload($round),
+        ]);
+    }
 
-        return view('training.show', compact('round'));
+    /** Polled by the scorekeeper so throws logged on another phone show up. */
+    public function data(TrainingRound $round)
+    {
+        $this->abortUnlessParticipant($round);
+
+        return response()->json($this->scoringPayload($round) + [
+            'scoringOpen' => !$round->isCompleted(),
+        ]);
+    }
+
+    private function scoringPayload(TrainingRound $round): array
+    {
+        $round->load(['players', 'holes.shots']);
+
+        return [
+            'players' => $round->players->map(fn (User $player) => [
+                'id' => $player->id,
+                'name' => $player->name,
+                'division' => '',
+                'avatarUrl' => $player->avatar ? asset('storage/' . $player->avatar) : null,
+                'isMe' => $player->id === Auth::id(),
+            ])->values(),
+            'holes' => $round->holes->map(fn (TrainingRoundHole $hole) => [
+                'id' => $hole->id,
+                'number' => $hole->number,
+                'par' => $hole->par,
+                'distanceM' => $hole->distance_m,
+                'shots' => $hole->shots->groupBy('user_id')->map(fn ($shots) => $shots->map(fn (TrainingRoundShot $shot) => [
+                    'shotNumber' => $shot->shot_number,
+                    'result' => $shot->result,
+                    'strokes' => $shot->strokes,
+                ])->values()),
+            ])->values(),
+        ];
     }
 
     public function searchPlayers(Request $request)
@@ -187,7 +224,7 @@ class TrainingRoundController extends Controller
             'user_id' => ['required', 'integer', Rule::exists('training_round_players', 'user_id')->where('training_round_id', $round->id)],
         ]);
 
-        $lastShot = $hole->shots()->where('user_id', $validated['user_id'])->orderByDesc('shot_number')->first();
+        $lastShot = $hole->shots()->where('user_id', $validated['user_id'])->reorder('shot_number', 'desc')->first();
         $lastShot?->delete();
 
         return response()->json([

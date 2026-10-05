@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CompetitionController;
+use App\Http\Controllers\CompetitionScoringController;
 use App\Http\Controllers\CourseController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExerciseController;
@@ -52,6 +53,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('/competitions/{id}', [CompetitionController::class, 'destroy'])->name('competitions.destroy');
     Route::post('/competitions/{id}/approve', [CompetitionController::class, 'approve'])->name('competitions.approve');
     Route::post('/competitions/{id}/unapprove', [CompetitionController::class, 'unapprove'])->name('competitions.unapprove');
+    Route::get('/competitions/{id}/score', [CompetitionScoringController::class, 'show'])->name('competitions.score');
+    Route::get('/competitions/{id}/score/data', [CompetitionScoringController::class, 'data'])->name('competitions.score.data');
+    Route::post('/competitions/{id}/holes/{hole}/shots', [CompetitionScoringController::class, 'addShot'])->name('competitions.shots.store');
+    Route::post('/competitions/{id}/holes/{hole}/shots/undo', [CompetitionScoringController::class, 'undoShot'])->name('competitions.shots.undo');
 
     Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
     Route::get('/courses/data', [CourseController::class, 'data'])->name('courses.data');
@@ -62,6 +67,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/training', [TrainingRoundController::class, 'store'])->name('training.store');
     Route::get('/training/players/search', [TrainingRoundController::class, 'searchPlayers'])->name('training.players.search');
     Route::get('/training/{round}', [TrainingRoundController::class, 'show'])->name('training.show');
+    Route::get('/training/{round}/data', [TrainingRoundController::class, 'data'])->name('training.data');
     Route::post('/training/{round}/complete', [TrainingRoundController::class, 'complete'])->name('training.complete');
     Route::post('/training/{round}/holes/{hole}/shots', [TrainingRoundController::class, 'addShot'])->name('training.shots.store');
     Route::post('/training/{round}/holes/{hole}/shots/undo', [TrainingRoundController::class, 'undoShot'])->name('training.shots.undo');

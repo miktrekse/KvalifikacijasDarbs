@@ -80,6 +80,7 @@ class CompetitionController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'event_date' => 'required|date|after_or_equal:today',
+            'start_time' => 'required|date_format:H:i',
             'location' => 'nullable|string|max:255',
             'course_name' => 'nullable|string|max:255',
             'competition_type' => 'required|in:singles,doubles',
@@ -117,6 +118,7 @@ class CompetitionController extends Controller
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
             'event_date' => $validated['event_date'],
+            'start_time' => $validated['start_time'],
             'location' => $validated['location'] ?? null,
             'course_name' => $validated['course_name'] ?? null,
             'format' => $validated['format'],
@@ -149,7 +151,11 @@ class CompetitionController extends Controller
             }
         }
 
-        return view('competitions.view', compact('competition'));
+        $competition->syncLifecycle();
+        $competition->load(['groups.registrations.user', 'registrations.group']);
+        $leaderboard = $competition->hasGroups() ? $competition->leaderboard() : collect();
+
+        return view('competitions.view', compact('competition', 'leaderboard'));
     }
 
     public function register(Request $request, $id)
@@ -162,6 +168,11 @@ class CompetitionController extends Controller
             'phone' => ['required', 'string', 'min:7', 'max:40', 'regex:/^[0-9+() .-]+$/'],
             'rating' => ['nullable', 'integer', 'min:0', 'max:1100'],
         ]);
+
+        $competition->syncLifecycle();
+        if ($competition->hasGroups() || $competition->isClosed()) {
+            return back()->withErrors(['division' => 'Registration is closed — groups have already been drawn.'])->withInput();
+        }
 
         if ($competition->max_participants && $competition->registrations->count() >= $competition->max_participants) {
             return back()->withErrors(['division' => 'This competition is full.'])->withInput();
@@ -207,6 +218,7 @@ class CompetitionController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'event_date' => 'required|date',
+            'start_time' => 'nullable|date_format:H:i',
             'location' => 'nullable|string|max:255',
             'course_name' => 'nullable|string|max:255',
             'competition_type' => 'required|in:singles,doubles',
@@ -245,6 +257,7 @@ class CompetitionController extends Controller
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
             'event_date' => $validated['event_date'],
+            'start_time' => $validated['start_time'] ?? $competition->start_time,
             'location' => $validated['location'] ?? null,
             'course_name' => $validated['course_name'] ?? null,
             'format' => $validated['format'],

@@ -67,6 +67,9 @@ return [
 
     'timezone' => 'UTC',
 
+    // Competition start times are entered in local course time.
+    'competition_timezone' => env('COMPETITION_TIMEZONE', 'Europe/Riga'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration

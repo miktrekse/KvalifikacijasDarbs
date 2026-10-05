@@ -100,6 +100,22 @@
                         </div>
 
                         <div>
+                            <label for="start_time" class="block text-sm font-medium text-gray-700 mb-1">Tee Off Time</label>
+                            <input type="time" name="start_time" id="start_time" value="{{ old('start_time', $competition->start_time ? substr($competition->start_time, 0, 5) : \App\Models\Competition::DEFAULT_START_TIME) }}"
+                                class="w-full rounded-lg border-gray-300 border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('start_time') border-red-500 @enderror">
+                            <p class="mt-1 text-xs text-gray-500">
+                                @if($competition->hasGroups())
+                                    Groups were drawn {{ $competition->groups_assigned_at->diffForHumans() }}.
+                                @else
+                                    Groups are drawn {{ \App\Models\Competition::GROUPS_DRAWN_MINUTES_BEFORE }} minutes before; scoring opens at tee off.
+                                @endif
+                            </p>
+                            @error('start_time')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div>
                             <label for="location" class="block text-sm font-medium text-gray-700 mb-1">Location</label>
                             <input type="text" name="location" id="location" value="{{ old('location', $competition->location) }}"
                                 class="w-full rounded-lg border-gray-300 border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('location') border-red-500 @enderror"

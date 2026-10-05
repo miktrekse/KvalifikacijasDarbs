@@ -13,6 +13,7 @@ class CompetitionRegistration extends Model
     protected $fillable = [
         'competition_id',
         'user_id',
+        'competition_group_id',
         'division',
         'phone',
         'rating',
@@ -26,5 +27,10 @@ class CompetitionRegistration extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(CompetitionGroup::class, 'competition_group_id');
     }
 }
