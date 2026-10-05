@@ -38,28 +38,58 @@ class CompetitionController extends Controller
 
     public function index(Request $request)
     {
-        $query = Competition::with('user');
+        $filters = $request->validate([
+            'status' => ['nullable', Rule::in(['all', 'ongoing', 'upcoming', 'completed', 'cancelled', 'mine'])],
+            'approved' => ['nullable', Rule::in(['all', 'approved', 'pending'])],
+        ]);
+        $status = $filters['status'] ?? 'all';
+        $isAdmin = Auth::user()->isAdmin();
 
-        if (Auth::check() && Auth::user()->isAdmin()) {
-            if ($request->has('status') && $request->status !== 'all') {
-                $query->where('status', $request->status);
-            }
-            if ($request->has('approved') && $request->approved !== 'all') {
-                $query->where('is_approved', $request->approved === 'approved');
-            }
-        } else {
-            $query->where('is_approved', true)
-                  ->where('is_public', true);
-            
-            if ($request->has('status') && $request->status !== 'all') {
-                $query->where('status', $request->status);
-            }
+        // Bring today's events up to date (groups drawn, marked live) so the list never shows a stale status
+        Competition::whereIn('status', ['upcoming', 'ongoing'])
+            ->whereDate('event_date', '<=', now()->addDay()->toDateString())
+            ->get()
+            ->each(fn (Competition $competition) => $competition->syncLifecycle());
+
+        $visible = fn () => $isAdmin
+            ? Competition::query()
+            : Competition::where('is_approved', true)->where('is_public', true);
+
+        $query = $visible()->with(['user', 'course'])->withCount('registrations');
+        $myRegistrationIds = CompetitionRegistration::where('user_id', Auth::id())->pluck('competition_id');
+
+        match ($status) {
+            'mine' => $query->whereIn('id', $myRegistrationIds),
+            'all' => null,
+            default => $query->where('status', $status),
+        };
+        if ($isAdmin && ($filters['approved'] ?? 'all') !== 'all') {
+            $query->where('is_approved', $filters['approved'] === 'approved');
         }
 
-        $competitions = $query->orderBy('event_date', 'desc')
-            ->paginate(12);
+        // Live first, then upcoming soonest-first, then finished events newest-first
+        $competitions = $query
+            ->orderByRaw("CASE status WHEN 'ongoing' THEN 0 WHEN 'upcoming' THEN 1 WHEN 'completed' THEN 2 ELSE 3 END")
+            ->orderByRaw("CASE WHEN status IN ('ongoing', 'upcoming') THEN event_date END ASC")
+            ->orderByDesc('event_date')
+            ->paginate(12)
+            ->withQueryString();
 
-        return view('competitions.index', compact('competitions'));
+        $counts = [
+            'live' => $visible()->where('status', 'ongoing')->count(),
+            'upcoming' => $visible()->where('status', 'upcoming')->count(),
+            'completed' => $visible()->where('status', 'completed')->count(),
+            'mine' => $visible()->whereIn('id', $myRegistrationIds)->whereIn('status', ['upcoming', 'ongoing'])->count(),
+            'pending' => $isAdmin ? Competition::where('is_approved', false)->count() : 0,
+        ];
+
+        return view('competitions.index', [
+            'competitions' => $competitions,
+            'status' => $status,
+            'approved' => $filters['approved'] ?? 'all',
+            'counts' => $counts,
+            'myRegistrationIds' => $myRegistrationIds->all(),
+        ]);
     }
 
     public function create()
