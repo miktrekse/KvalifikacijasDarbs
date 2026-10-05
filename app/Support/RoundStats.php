@@ -26,6 +26,7 @@ class RoundStats
         'rating' => ['Round rating', 'number', true],
         'birdies' => ['Birdies', 'count', true],
         'ob' => ['OB throws', 'count', false],
+        'throwin' => ['Longest throw-in', 'metres', true],
     ];
 
     private const ON_FAIRWAY = ['fairway', 'circle_2', 'circle_1', 'in_basket'];
@@ -46,6 +47,7 @@ class RoundStats
             'birdies' => 0,
             'ob' => 0,
             'score' => 0,
+            'throwin' => null,
         ];
 
         foreach ($holes as $hole) {
@@ -74,11 +76,16 @@ class RoundStats
             foreach ($shots as $i => $shot) {
                 $running += $shot->strokes;
                 $inRegulation = $running <= $hole->par - 2;
-                if ($inRegulation && in_array($shot->result, ['circle_1', 'in_basket'], true)) {
+                // An OB throw leaves you wherever play resumes (C1, drop zone, re-tee…), penalty included
+                $position = self::position($shot);
+                if ($inRegulation && in_array($position, ['circle_1', 'in_basket'], true)) {
                     $hitC1 = true;
                 }
-                if ($inRegulation && in_array($shot->result, ['circle_2', 'circle_1', 'in_basket'], true)) {
+                if ($inRegulation && in_array($position, ['circle_2', 'circle_1', 'in_basket'], true)) {
                     $hitC2 = true;
+                }
+                if ($shot->result === 'in_basket' && $shot->distance_m) {
+                    $stats['throwin'] = max($stats['throwin'] ?? 0, $shot->distance_m);
                 }
                 if ($shot->result === 'out_of_bounds') {
                     $stats['ob']++;
@@ -87,7 +94,7 @@ class RoundStats
                     $troubled = true;
                 }
 
-                $lie = $i > 0 ? $shots[$i - 1]->result : null;
+                $lie = $i > 0 ? self::position($shots[$i - 1]) : null;
                 if ($lie === 'circle_1' || $lie === 'circle_2') {
                     $key = $lie === 'circle_1' ? 'c1_putting' : 'c2_putting';
                     $stats[$key]['attempts']++;
@@ -109,32 +116,48 @@ class RoundStats
         return $stats;
     }
 
-    /**
-     * Turns a list of rounds into the three profile views.
-     *
-     * @param  Collection  $rounds  newest first; each ['stats' => forRound(), 'rating' => int, 'competition' => Competition, 'played_at' => Carbon]
-     */
-    public static function summarise(Collection $rounds): array
+    /** Where the disc ended up after a throw; for OB, where play resumes. */
+    private static function position($shot): ?string
     {
+        return $shot->result === 'out_of_bounds' ? $shot->ob_lie : $shot->result;
+    }
+
+    /**
+     * Turns a list of rounds into the three profile views. Works for tournament and
+     * practice rounds alike: each round brings its own title and link.
+     *
+     * @param  Collection  $rounds  newest first; each ['stats' => forRound(), 'rating' => ?int, 'title' => string, 'url' => ?string, 'played_at' => Carbon]
+     * @param  string[]  $exclude  stat keys that don't apply (e.g. 'rating' for unrated practice)
+     */
+    public static function summarise(Collection $rounds, array $exclude = []): array
+    {
+        $stats = array_diff_key(self::STATS, array_flip($exclude));
+
         return [
-            'all' => self::averages($rounds),
-            'last5' => self::averages($rounds->take(5)),
-            'best' => self::best($rounds),
+            'keys' => array_keys($stats),
+            'all' => self::averages($rounds, $stats),
+            'last5' => self::averages($rounds->take(5), $stats),
+            'best' => self::best($rounds, $stats),
         ];
     }
 
-    private static function averages(Collection $rounds): array
+    private static function averages(Collection $rounds, array $statList): array
     {
         $count = $rounds->count();
         $result = ['rounds' => $count, 'stats' => []];
 
-        foreach (self::STATS as $key => [$label, $kind]) {
+        foreach ($statList as $key => [$label, $kind]) {
             if ($kind === 'percent') {
                 $made = $rounds->sum(fn ($r) => $r['stats'][$key]['made']);
                 $attempts = $rounds->sum(fn ($r) => $r['stats'][$key]['attempts']);
                 $result['stats'][$key] = [
                     'value' => $attempts ? round($made / $attempts * 100) : null,
                     'detail' => "{$made}/{$attempts}",
+                ];
+            } elseif ($kind === 'metres') {
+                $result['stats'][$key] = [
+                    'value' => $rounds->max(fn ($r) => $r['stats'][$key]),
+                    'detail' => 'longest',
                 ];
             } else {
                 $values = $rounds->map(fn ($r) => $key === 'rating' ? $r['rating'] : $r['stats'][$key])->filter(fn ($v) => $v !== null);
@@ -149,11 +172,11 @@ class RoundStats
     }
 
     /** Each stat's single best round, newest round wins ties. */
-    private static function best(Collection $rounds): array
+    private static function best(Collection $rounds, array $statList): array
     {
         $result = ['rounds' => $rounds->count(), 'stats' => []];
 
-        foreach (self::STATS as $key => [$label, $kind, $higherIsBetter]) {
+        foreach ($statList as $key => [$label, $kind, $higherIsBetter]) {
             $candidates = $rounds
                 ->map(function ($round) use ($key, $kind) {
                     if ($kind === 'percent') {
@@ -178,8 +201,8 @@ class RoundStats
             $result['stats'][$key] = $top ? [
                 'value' => $top['value'],
                 'detail' => $top['detail'],
-                'competition_id' => $top['round']['competition']?->id,
-                'competition' => $top['round']['competition']?->name ?? 'Deleted tournament',
+                'url' => $top['round']['url'],
+                'title' => $top['round']['title'],
                 'date' => $top['round']['played_at']->format('M j, Y'),
             ] : ['value' => null, 'detail' => null];
         }

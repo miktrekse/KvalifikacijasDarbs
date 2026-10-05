@@ -6,6 +6,7 @@ use App\Models\Competition;
 use App\Models\CompetitionGroup;
 use App\Models\CompetitionHole;
 use App\Models\CompetitionShot;
+use App\Models\TrainingRoundShot;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -55,6 +56,8 @@ class CompetitionScoringController extends Controller
                     'shotNumber' => $shot->shot_number,
                     'result' => $shot->result,
                     'strokes' => $shot->strokes,
+                    'obLie' => $shot->ob_lie,
+                    'distanceM' => $shot->distance_m,
                 ])->values()),
             ])->values(),
         ];
@@ -123,7 +126,12 @@ class CompetitionScoringController extends Controller
     {
         $competition = Competition::findOrFail($id);
         $userId = $this->authorizeShot($request, $competition, $hole);
-        $request->validate(['result' => ['required', Rule::in(array_keys(CompetitionShot::RESULTS))]]);
+        $request->validate([
+            'result' => ['required', Rule::in(array_keys(CompetitionShot::RESULTS))],
+            // After an OB the scorer says where play resumes; a made throw from outside C2 can carry its distance
+            'ob_lie' => ['nullable', 'required_if:result,out_of_bounds', Rule::in(array_keys(CompetitionShot::OB_LIES))],
+            'distance_m' => ['nullable', 'integer', 'min:1', 'max:300'],
+        ]);
 
         // Two scorers on the same card may tap at once; lock the player's hole while numbering the shot.
         $shot = DB::transaction(function () use ($hole, $userId, $request) {
@@ -135,7 +143,9 @@ class CompetitionScoringController extends Controller
                 'recorded_by' => Auth::id(),
                 'shot_number' => $shots->count() + 1,
                 'result' => $request->input('result'),
+                'ob_lie' => $request->input('result') === 'out_of_bounds' ? $request->input('ob_lie') : null,
                 'strokes' => CompetitionShot::RESULTS[$request->input('result')]['strokes'],
+                'distance_m' => TrainingRoundShot::throwInDistance($request->input('result'), $request->integer('distance_m') ?: null, $shots->last()),
             ]);
         });
 
@@ -148,6 +158,8 @@ class CompetitionScoringController extends Controller
                 'shotNumber' => $shot->shot_number,
                 'result' => $shot->result,
                 'strokes' => $shot->strokes,
+                'obLie' => $shot->ob_lie,
+                'distanceM' => $shot->distance_m,
             ],
         ]);
     }

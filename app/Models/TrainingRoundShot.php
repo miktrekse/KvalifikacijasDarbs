@@ -23,17 +23,33 @@ class TrainingRoundShot extends Model
         'in_basket' => ['label' => 'In the Basket', 'strokes' => 1],
     ];
 
+    /** Where play resumes after an OB throw (the penalty stroke is already in RESULTS). */
+    public const OB_LIES = [
+        'circle_1' => 'Circle 1',
+        'circle_2' => 'Circle 2',
+        'fairway' => 'Fairway',
+        'off_fairway' => 'Off fairway',
+        'tee' => 'Re-tee',
+        'drop_zone' => 'Drop zone',
+    ];
+
+    /** Positions inside Circle 2: makes from here are putts, anything further is a throw-in. */
+    public const PUTTING_LIES = ['circle_1', 'circle_2'];
+
     protected $fillable = [
         'training_round_hole_id',
         'user_id',
         'shot_number',
         'result',
+        'ob_lie',
         'strokes',
+        'distance_m',
     ];
 
     protected $casts = [
         'shot_number' => 'integer',
         'strokes' => 'integer',
+        'distance_m' => 'integer',
     ];
 
     public function hole(): BelongsTo
@@ -44,6 +60,23 @@ class TrainingRoundShot extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Distance only counts for a make from outside Circle 2 (a throw-in), so it is
+     * dropped for putts and for any result other than in the basket.
+     */
+    public static function throwInDistance(string $result, ?int $distance, ?Model $previousShot): ?int
+    {
+        if ($result !== 'in_basket' || !$distance) {
+            return null;
+        }
+
+        $lie = $previousShot === null
+            ? 'tee'
+            : ($previousShot->result === 'out_of_bounds' ? $previousShot->ob_lie : $previousShot->result);
+
+        return in_array($lie, self::PUTTING_LIES, true) ? null : $distance;
     }
 
     public function getLabelAttribute(): string

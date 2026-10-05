@@ -162,6 +162,8 @@ class TrainingRoundController extends Controller
                     'shotNumber' => $shot->shot_number,
                     'result' => $shot->result,
                     'strokes' => $shot->strokes,
+                    'obLie' => $shot->ob_lie,
+                    'distanceM' => $shot->distance_m,
                 ])->values()),
             ])->values(),
         ];
@@ -200,6 +202,8 @@ class TrainingRoundController extends Controller
         $validated = $request->validate([
             'user_id' => ['required', 'integer', Rule::exists('training_round_players', 'user_id')->where('training_round_id', $round->id)],
             'result' => ['required', Rule::in(array_keys(TrainingRoundShot::RESULTS))],
+            'ob_lie' => ['nullable', 'required_if:result,out_of_bounds', Rule::in(array_keys(TrainingRoundShot::OB_LIES))],
+            'distance_m' => ['nullable', 'integer', 'min:1', 'max:300'],
         ]);
 
         $alreadyHoledOut = $hole->shots()
@@ -216,7 +220,13 @@ class TrainingRoundController extends Controller
             'user_id' => $validated['user_id'],
             'shot_number' => $nextShotNumber,
             'result' => $validated['result'],
+            'ob_lie' => $validated['result'] === 'out_of_bounds' ? $validated['ob_lie'] : null,
             'strokes' => $resultMeta['strokes'],
+            'distance_m' => TrainingRoundShot::throwInDistance(
+                $validated['result'],
+                $validated['distance_m'] ?? null,
+                $hole->shots()->where('user_id', $validated['user_id'])->reorder('shot_number', 'desc')->first()
+            ),
         ]);
 
         return response()->json([
@@ -224,6 +234,8 @@ class TrainingRoundController extends Controller
                 'id' => $shot->id,
                 'shot_number' => $shot->shot_number,
                 'result' => $shot->result,
+                'ob_lie' => $shot->ob_lie,
+                'distance_m' => $shot->distance_m,
                 'label' => $shot->label,
                 'strokes' => $shot->strokes,
             ],

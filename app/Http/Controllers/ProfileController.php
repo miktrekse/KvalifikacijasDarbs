@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\CompetitionHole;
+use App\Models\TrainingRound;
 use App\Models\User;
 use App\Support\RatingEngine;
 use App\Support\RoundStats;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
 class ProfileController extends Controller
@@ -54,12 +56,47 @@ class ProfileController extends Controller
         $statRounds = $log->map(fn ($round) => [
             'stats' => RoundStats::forRound($holesByCompetition->get($round->competition_id, collect()), $user->id),
             'rating' => $round->round_rating,
-            'competition' => $round->competition,
+            'title' => $round->competition?->name ?? 'Deleted tournament',
+            'url' => $round->competition ? route('competitions.view', $round->competition) : null,
             'played_at' => $round->played_at,
         ]);
         $statModes = $statRounds->isNotEmpty() ? RoundStats::summarise($statRounds) : null;
 
-        return view('profile.show', compact('user', 'registeredCompetitions', 'playedCompetitions', 'log', 'ratingStats', 'chart', 'statModes'));
+        // Practice stats are private: only built for the player looking at their own profile
+        $isOwner = Auth::id() === $user->id && !$user->isGuest();
+        $practice = $isOwner ? $this->practiceStats($user) : null;
+
+        return view('profile.show', compact('user', 'registeredCompetitions', 'playedCompetitions', 'log', 'ratingStats', 'chart', 'statModes', 'isOwner', 'practice'));
+    }
+
+    /**
+     * Stats from the player's finished practice rounds (every hole holed out), newest first.
+     * Practice isn't rated, so round rating is left out.
+     */
+    private function practiceStats(User $user): array
+    {
+        $rounds = TrainingRound::whereHas('players', fn ($query) => $query->where('user_id', $user->id))
+            ->with(['holes.shots' => fn ($query) => $query->where('user_id', $user->id)])
+            ->orderByDesc('created_at')
+            ->get();
+
+        $finished = $rounds->filter(fn (TrainingRound $round) => $round->holes->isNotEmpty()
+            && $round->holes->every(fn ($hole) => $hole->shots->sortBy('shot_number')->last()?->result === 'in_basket'));
+
+        $statRounds = $finished->map(fn (TrainingRound $round) => [
+            'stats' => RoundStats::forRound($round->holes, $user->id),
+            'rating' => null,
+            'title' => $round->course_name,
+            'url' => route('training.show', $round),
+            'played_at' => $round->completed_at ?? $round->created_at,
+        ])->values();
+
+        return [
+            'modes' => $statRounds->isNotEmpty() ? RoundStats::summarise($statRounds, ['rating']) : null,
+            'finished' => $finished->count(),
+            'unfinished' => $rounds->count() - $finished->count(),
+            'holes' => $finished->sum(fn (TrainingRound $round) => $round->holes->count()),
+        ];
     }
 
     public function update(Request $request)

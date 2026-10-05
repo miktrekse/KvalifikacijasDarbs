@@ -10,18 +10,23 @@ class CompetitionShot extends Model
     /** Same landing zones as training rounds, so stats are computed the same way. */
     public const RESULTS = TrainingRoundShot::RESULTS;
 
+    public const OB_LIES = TrainingRoundShot::OB_LIES;
+
     protected $fillable = [
         'competition_hole_id',
         'user_id',
         'recorded_by',
         'shot_number',
         'result',
+        'ob_lie',
         'strokes',
+        'distance_m',
     ];
 
     protected $casts = [
         'shot_number' => 'integer',
         'strokes' => 'integer',
+        'distance_m' => 'integer',
     ];
 
     public function hole(): BelongsTo

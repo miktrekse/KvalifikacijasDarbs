@@ -110,6 +110,33 @@
         { key: 'in_basket', label: 'In the basket', short: 'In', cls: 'is-in' },
     ];
     const resultByKey = Object.fromEntries(RESULTS.map(r => [r.key, r]));
+
+    // Where play resumes after an OB throw (its penalty stroke is already counted)
+    const OB_LIES = [
+        { key: 'circle_1', label: 'Circle 1', short: 'C1' },
+        { key: 'circle_2', label: 'Circle 2', short: 'C2' },
+        { key: 'fairway', label: 'Fairway', short: 'FW' },
+        { key: 'off_fairway', label: 'Off fairway', short: 'Rough' },
+        { key: 'tee', label: 'Re-tee', short: 'Tee' },
+        { key: 'drop_zone', label: 'Drop zone', short: 'DZ' },
+    ];
+    const obLieByKey = Object.fromEntries(OB_LIES.map(l => [l.key, l]));
+    const LIE_TEXT = { tee: 'the tee', fairway: 'the fairway', off_fairway: 'off the fairway', circle_2: 'Circle 2', circle_1: 'Circle 1', drop_zone: 'the drop zone' };
+    const PUTTING_LIES = ['circle_1', 'circle_2'];
+    // Where the disc ended up; for OB, where play resumes
+    const positionOf = shot => shot.result === 'out_of_bounds' ? (shot.obLie || null) : shot.result;
+    // Where the next throw comes from (null = an older OB recorded without its lie)
+    const lieFor = shots => shots.length ? positionOf(shots[shots.length - 1]) : 'tee';
+    const chipLabel = shot => shot.result === 'out_of_bounds'
+        ? 'OB' + (shot.obLie ? '→' + obLieByKey[shot.obLie].short : '')
+        : (shot.result === 'in_basket' && shot.distanceM ? 'In ' + shot.distanceM + 'm' : (resultByKey[shot.result]?.short || shot.result));
+    const normaliseShot = shot => ({
+        shotNumber: shot.shotNumber ?? shot.shot_number,
+        result: shot.result,
+        strokes: shot.strokes,
+        obLie: shot.obLie ?? shot.ob_lie ?? null,
+        distanceM: shot.distanceM ?? shot.distance_m ?? null,
+    });
     const SCORE_NAMES = { '-3': 'Albatross', '-2': 'Eagle', '-1': 'Birdie', '0': 'Par', '1': 'Bogey', '2': 'Double bogey', '3': 'Triple bogey' };
 
     // Holes in the order this card plays them (shotgun start wraps around).
@@ -124,6 +151,8 @@
     let activeTab = 'score';
     let statsPlayerId = (state.players.find(p => p.isMe) || state.players[0] || {}).id;
     let pending = 0;
+    // An open follow-up question for one player's throw: { userId, holeId, type: 'ob' | 'distance' }
+    let prompt = null;
 
     // ---------- helpers ----------
     const $ = id => document.getElementById(id);
@@ -270,7 +299,30 @@
             const t = totals(player.id);
             const rel = strokes - hole.par;
             const scoreName = finished ? (strokes === 1 ? 'Ace!' : SCORE_NAMES[rel] || (rel > 0 ? '+' + rel : rel)) : (shots.length ? 'In play' : 'On the tee');
-            const lie = shots.length ? resultByKey[shots[shots.length - 1].result] : null;
+            const lie = lieFor(shots);
+            const asking = prompt && prompt.userId === player.id && prompt.holeId === hole.id ? prompt.type : null;
+            const shotArea = asking === 'ob'
+                ? `<div class="ds-prompt">
+                        <p class="ds-prompt__title">Out of bounds — where is the next throw from?</p>
+                        <div class="ds-shots ds-shots--3">${OB_LIES.map(l => `<button type="button" data-ob-lie="${l.key}" class="ds-shot is-oblie">${l.label}</button>`).join('')}</div>
+                        <button type="button" data-cancel class="ds-prompt__cancel">Cancel</button>
+                    </div>`
+                : asking === 'distance'
+                ? `<form class="ds-prompt" data-distance-form>
+                        <p class="ds-prompt__title">In from ${LIE_TEXT[lie] || 'distance'}! How far was the throw?</p>
+                        <div class="flex items-center gap-2">
+                            <input type="number" name="distance" min="1" max="300" inputmode="numeric" placeholder="e.g. 18" class="ds-prompt__input" aria-label="Distance in metres">
+                            <span class="font-bold text-gray-500">m</span>
+                            <button type="submit" class="ds-btn ds-btn--flight !py-2">Save</button>
+                        </div>
+                        <div class="mt-2 flex gap-4">
+                            <button type="button" data-skip class="ds-prompt__cancel">Skip distance</button>
+                            <button type="button" data-cancel class="ds-prompt__cancel">Cancel</button>
+                        </div>
+                    </form>`
+                : `<div class="ds-shots">
+                        ${RESULTS.map(r => `<button type="button" data-result="${r.key}" class="ds-shot ${r.cls}" ${canScore ? '' : 'disabled'}>${r.label}</button>`).join('')}
+                    </div>`;
 
             return `<article class="ds-player ${finished ? 'is-finished' : ''}" data-player="${player.id}">
                 <header class="flex items-center gap-3">
@@ -288,20 +340,34 @@
                     </div>
                 </header>
                 <div class="ds-shotlog">
-                    ${shots.map(s => `<span class="ds-chip ${resultByKey[s.result]?.cls || ''}">${s.shotNumber}<b>${resultByKey[s.result]?.short || s.result}</b></span>`).join('')
+                    ${shots.map(s => `<span class="ds-chip ${resultByKey[s.result]?.cls || ''}">${s.shotNumber}<b>${esc(chipLabel(s))}</b></span>`).join('')
                       || '<span class="text-xs text-gray-400">Tap where the drive landed.</span>'}
                 </div>
-                ${finished ? '' : `<p class="mb-2 text-xs font-semibold text-gray-500">${lie ? 'Shot ' + (shots.length + 1) + ' from ' + lie.label.toLowerCase() : 'Drive'}</p>`}
-                ${finished ? '' : `<div class="ds-shots">
-                    ${RESULTS.map(r => `<button type="button" data-result="${r.key}" class="ds-shot ${r.cls}" ${canScore ? '' : 'disabled'}>${r.label}</button>`).join('')}
-                </div>`}
+                ${finished ? '' : `<p class="mb-2 text-xs font-semibold text-gray-500">${shots.length ? 'Shot ' + (shots.length + 1) + ' from ' + (LIE_TEXT[lie] || 'after OB') : 'Drive from the tee'}</p>`}
+                ${finished ? '' : shotArea}
                 <button type="button" data-undo class="mt-3 text-xs font-bold text-gray-400 hover:text-red-600 disabled:opacity-40" ${!canScore || !shots.length ? 'disabled' : ''}>Undo last throw</button>
             </article>`;
         }).join('');
 
         $('hole-players').querySelectorAll('[data-player]').forEach(card => {
             const userId = Number(card.dataset.player);
-            card.querySelectorAll('[data-result]').forEach(btn => btn.addEventListener('click', () => addShot(hole, userId, btn.dataset.result)));
+            card.querySelectorAll('[data-result]').forEach(btn => btn.addEventListener('click', () => chooseResult(hole, userId, btn.dataset.result)));
+            card.querySelectorAll('[data-ob-lie]').forEach(btn => btn.addEventListener('click', () => {
+                prompt = null;
+                addShot(hole, userId, 'out_of_bounds', { ob_lie: btn.dataset.obLie });
+            }));
+            card.querySelector('[data-cancel]')?.addEventListener('click', () => { prompt = null; renderAll(); });
+            const distanceForm = card.querySelector('[data-distance-form]');
+            if (distanceForm) {
+                distanceForm.addEventListener('submit', event => {
+                    event.preventDefault();
+                    const metres = parseInt(distanceForm.distance.value, 10);
+                    prompt = null;
+                    addShot(hole, userId, 'in_basket', metres > 0 ? { distance_m: Math.min(metres, 300) } : {});
+                });
+                distanceForm.querySelector('[data-skip]').addEventListener('click', () => { prompt = null; addShot(hole, userId, 'in_basket'); });
+                distanceForm.distance.focus();
+            }
             card.querySelector('[data-undo]').addEventListener('click', () => undoShot(hole, userId));
         });
 
@@ -325,10 +391,21 @@
         }
     }
 
-    async function addShot(hole, userId, result) {
+    // OB asks where play resumes; a make from outside Circle 2 asks how far it was
+    function chooseResult(hole, userId, result) {
+        const lie = lieFor(shotsOf(hole, userId));
+        if (result === 'out_of_bounds' || (result === 'in_basket' && !PUTTING_LIES.includes(lie))) {
+            prompt = { userId, holeId: hole.id, type: result === 'out_of_bounds' ? 'ob' : 'distance' };
+            renderAll();
+            return;
+        }
+        addShot(hole, userId, result);
+    }
+
+    async function addShot(hole, userId, result, extra = {}) {
         try {
-            const data = await send(state.shotUrl.replace('__HOLE__', hole.id), { user_id: userId, result });
-            (hole.shots[userId] = hole.shots[userId] || []).push({ shotNumber: data.shot.shotNumber ?? data.shot.shot_number, result: data.shot.result, strokes: data.shot.strokes });
+            const data = await send(state.shotUrl.replace('__HOLE__', hole.id), { user_id: userId, result, ...extra });
+            (hole.shots[userId] = hole.shots[userId] || []).push(normaliseShot(data.shot));
             renderAll();
             if (result === 'in_basket' && navigator.vibrate) navigator.vibrate(30);
         } catch (e) {
@@ -383,7 +460,7 @@
         const holes = state.holes.filter(h => isFinished(h, userId));
         const dist = { eagle: 0, birdie: 0, par: 0, bogey: 0, double: 0 };
         let fairwayHits = 0, c1r = 0, c2r = 0, obs = 0, scrambles = 0, scrambleChances = 0;
-        let c1Attempts = 0, c1Makes = 0, c2Attempts = 0, c2Makes = 0, aces = 0;
+        let c1Attempts = 0, c1Makes = 0, c2Attempts = 0, c2Makes = 0, aces = 0, longestIn = 0;
 
         holes.forEach(hole => {
             const shots = shotsOf(hole, userId);
@@ -399,11 +476,13 @@
             shots.forEach((shot, i) => {
                 running += shot.strokes;
                 const inReg = running <= hole.par - 2;
-                if (inReg && ['circle_1', 'in_basket'].includes(shot.result)) hitC1 = true;
-                if (inReg && ['circle_2', 'circle_1', 'in_basket'].includes(shot.result)) hitC2 = true;
+                const position = positionOf(shot);
+                if (inReg && ['circle_1', 'in_basket'].includes(position)) hitC1 = true;
+                if (inReg && ['circle_2', 'circle_1', 'in_basket'].includes(position)) hitC2 = true;
+                if (shot.result === 'in_basket' && shot.distanceM) longestIn = Math.max(longestIn, shot.distanceM);
                 if (shot.result === 'out_of_bounds') obs++;
                 if (['out_of_bounds', 'off_fairway'].includes(shot.result)) troubled = true;
-                const lie = i > 0 ? shots[i - 1].result : null;
+                const lie = i > 0 ? positionOf(shots[i - 1]) : null;
                 if (lie === 'circle_1') { c1Attempts++; if (shot.result === 'in_basket') c1Makes++; }
                 if (lie === 'circle_2') { c2Attempts++; if (shot.result === 'in_basket') c2Makes++; }
             });
@@ -413,7 +492,7 @@
         });
 
         const t = totals(userId);
-        return { holes: holes.length, dist, fairwayHits, c1r, c2r, obs, scrambles, scrambleChances, c1Attempts, c1Makes, c2Attempts, c2Makes, aces, ...t };
+        return { holes: holes.length, dist, fairwayHits, c1r, c2r, obs, scrambles, scrambleChances, c1Attempts, c1Makes, c2Attempts, c2Makes, aces, longestIn, ...t };
     }
 
     const pct = (n, d) => d ? Math.round((n / d) * 100) : null;
@@ -461,10 +540,11 @@
                     <dl class="mt-4 grid grid-cols-5 gap-2 text-center">
                         ${distRows.map(([label, n, c]) => `<div><dt class="text-[0.62rem] font-bold uppercase tracking-wide text-gray-500">${label}</dt><dd class="font-display text-2xl font-extrabold" style="color:${c}">${n}</dd></div>`).join('')}
                     </dl>
-                    <div class="mt-4 grid grid-cols-3 gap-2 border-t border-dashed border-line pt-4 text-center">
+                    <div class="mt-4 grid grid-cols-4 gap-2 border-t border-dashed border-line pt-4 text-center">
                         <div><p class="ds-stat__label">OB</p><p class="font-display text-xl font-extrabold text-ink">${s.obs}</p></div>
                         <div><p class="ds-stat__label">Avg / hole</p><p class="font-display text-xl font-extrabold text-ink">${(s.strokes / s.holes).toFixed(1)}</p></div>
                         <div><p class="ds-stat__label">Aces</p><p class="font-display text-xl font-extrabold text-ink">${s.aces}</p></div>
+                        <div><p class="ds-stat__label">Longest in</p><p class="font-display text-xl font-extrabold text-ink">${s.longestIn ? s.longestIn + " m" : "–"}</p></div>
                     </div>
                 </div>
                 <div class="ds-card p-5">
@@ -527,7 +607,7 @@
 
     // Pull the card's latest throws so scores entered by others on the card show up.
     async function refresh() {
-        if (pending || !state.dataUrl) return;
+        if (pending || !state.dataUrl || prompt) return;
         try {
             const response = await fetch(state.dataUrl, { headers: { 'Accept': 'application/json' } });
             if (!response.ok || pending) return;

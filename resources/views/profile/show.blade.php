@@ -90,73 +90,40 @@
         </div>
     </section>
 
-    {{-- Player stats: all-time averages / last 5 tournaments / best ever --}}
-    <section class="ds-card" id="player-stats">
-        <div class="ds-card__head flex-wrap">
-            <div>
-                <h2 class="ds-card__title">Player stats</h2>
-                <p class="mt-1 text-sm text-gray-500" data-stats-caption></p>
-            </div>
-            @if($statModes)
-                <div class="ds-tabs" role="group" aria-label="Stats view">
-                    <button type="button" data-stats-mode="all" class="is-active" aria-pressed="true">All-time average</button>
-                    <button type="button" data-stats-mode="last5" aria-pressed="false">Last 5</button>
-                    <button type="button" data-stats-mode="best" aria-pressed="false">Best ever</button>
-                </div>
-            @endif
-        </div>
-        <div class="ds-card__body">
-            @if(!$statModes)
-                <div class="rounded-2xl border border-dashed border-gray-300 px-4 py-10 text-center">
-                    <p class="font-display text-lg font-extrabold text-ink">No tournament stats yet</p>
-                    <p class="mt-1 text-sm text-gray-500">Fairway hits, C1 in regulation, putting and more appear after the first finished tournament round.</p>
-                </div>
-            @else
-                @php
-                    $captions = [
-                        'all' => 'Averages over all ' . $statModes['all']['rounds'] . ' rated tournament ' . Str::plural('round', $statModes['all']['rounds']) . '.',
-                        'last5' => 'Averages over the last ' . $statModes['last5']['rounds'] . ' ' . Str::plural('tournament', $statModes['last5']['rounds']) . '.',
-                        'best' => 'The single best round for each stat — open the tournament it happened in with the arrow.',
-                    ];
-                    $fmtRelAvg = fn ($v) => $v === null ? '—' : ($v == 0 ? 'E' : ($v > 0 ? '+' : '') . (floor($v) == $v ? (int) $v : number_format($v, 1)));
-                @endphp
-                @foreach(['all', 'last5', 'best'] as $mode)
-                    <div class="ds-statgrid {{ $mode === 'all' ? '' : 'hidden' }}" data-stats-panel="{{ $mode }}" data-caption="{{ $captions[$mode] }}">
-                        @foreach(\App\Support\RoundStats::STATS as $key => [$label, $kind])
-                            @php $stat = $statModes[$mode]['stats'][$key]; @endphp
-                            <div class="ds-stattile">
-                                <div class="flex items-start justify-between gap-2">
-                                    <p class="ds-stat__label">{{ $label }}</p>
-                                    @if($mode === 'best' && !empty($stat['competition_id']))
-                                        <a href="{{ route('competitions.view', $stat['competition_id']) }}" class="ds-stattile__jump" title="Open {{ $stat['competition'] }}" aria-label="Open the tournament: {{ $stat['competition'] }}">
-                                            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg>
-                                        </a>
-                                    @endif
-                                </div>
+    {{-- Tournament stats (public) --}}
+    @include('profile.partials.stat-modes', [
+        'sectionId' => 'player-stats',
+        'title' => 'Tournament stats',
+        'modes' => $statModes,
+        'captions' => $statModes ? [
+            'all' => 'Averages over all ' . $statModes['all']['rounds'] . ' rated tournament ' . Str::plural('round', $statModes['all']['rounds']) . '.',
+            'last5' => 'Averages over the last ' . $statModes['last5']['rounds'] . ' ' . Str::plural('tournament', $statModes['last5']['rounds']) . '.',
+            'best' => 'The single best round for each stat — open the tournament it happened in with the arrow.',
+        ] : [],
+        'emptyTitle' => 'No tournament stats yet',
+        'emptyText' => 'Fairway hits, C1 in regulation, putting and more appear after the first finished tournament round.',
+        'roundNoun' => 'tournament',
+        'private' => false,
+    ])
 
-                                @if($kind === 'percent')
-                                    <div class="mt-3 flex items-center gap-3">
-                                        <div class="ds-ring ds-ring--sm" style="--p: {{ $stat['value'] ?? 0 }}; --c: #178454"><span>{{ $stat['value'] !== null ? $stat['value'] . '%' : '—' }}</span></div>
-                                        <p class="font-mono text-xs text-gray-500">{{ $stat['value'] !== null ? $stat['detail'] : 'no attempts' }}</p>
-                                    </div>
-                                @elseif($kind === 'relative')
-                                    <p class="mt-3"><span class="ds-rel ds-rel--lg {{ $stat['value'] === null ? 'is-even' : ($stat['value'] < 0 ? 'is-under' : ($stat['value'] > 0 ? 'is-over' : 'is-even')) }}">{{ $fmtRelAvg($stat['value']) }}</span></p>
-                                    <p class="mt-1 font-mono text-xs text-gray-500">{{ $mode === 'best' ? 'lowest round' : 'per round' }}</p>
-                                @else
-                                    <p class="mt-3 font-display text-3xl font-extrabold leading-none tracking-tight text-ink">{{ $stat['value'] ?? '—' }}</p>
-                                    <p class="mt-1 font-mono text-xs text-gray-500">{{ $mode === 'best' ? ($key === 'ob' ? 'fewest in a round' : 'in one round') : ($key === 'rating' ? 'average' : 'per round') }}</p>
-                                @endif
-
-                                @if($mode === 'best' && !empty($stat['competition']))
-                                    <p class="mt-3 truncate border-t border-dashed border-line pt-2 text-xs text-gray-500" title="{{ $stat['competition'] }}">{{ $stat['competition'] }} · {{ $stat['date'] }}</p>
-                                @endif
-                            </div>
-                        @endforeach
-                    </div>
-                @endforeach
-            @endif
-        </div>
-    </section>
+    {{-- Practice stats: private, only rendered for the profile's owner --}}
+    @if($isOwner && $practice)
+        @include('profile.partials.stat-modes', [
+            'sectionId' => 'practice-stats',
+            'title' => 'Practice stats',
+            'modes' => $practice['modes'],
+            'captions' => $practice['modes'] ? [
+                'all' => 'Averages over all ' . $practice['finished'] . ' finished practice ' . Str::plural('round', $practice['finished']) . ' (' . $practice['holes'] . ' holes).',
+                'last5' => 'Averages over your last ' . $practice['modes']['last5']['rounds'] . ' finished practice ' . Str::plural('round', $practice['modes']['last5']['rounds']) . '.',
+                'best' => 'Your single best practice round for each stat — open the round with the arrow.',
+            ] : [],
+            'emptyTitle' => 'No finished practice rounds yet',
+            'emptyText' => 'Finish every hole of a training round and its fairway hits, putting and more show up here — just for you.',
+            'roundNoun' => 'practice round',
+            'private' => true,
+            'note' => $practice['unfinished'] ? $practice['unfinished'] . ' unfinished ' . Str::plural('round', $practice['unfinished']) . ' not counted — only rounds where every hole was holed out are included.' : null,
+        ])
+    @endif
 
     {{-- Tournament log --}}
     <section class="ds-card">
@@ -253,29 +220,6 @@
     @endauth
 </div>
 
-@if($statModes)
-@push('scripts')
-<script>
-(() => {
-    // Switch the stats grid between all-time averages, last 5 and best ever
-    const section = document.getElementById('player-stats');
-    const caption = section.querySelector('[data-stats-caption]');
-    const show = mode => {
-        section.querySelectorAll('[data-stats-mode]').forEach(b => {
-            b.classList.toggle('is-active', b.dataset.statsMode === mode);
-            b.setAttribute('aria-pressed', b.dataset.statsMode === mode);
-        });
-        section.querySelectorAll('[data-stats-panel]').forEach(p => {
-            p.classList.toggle('hidden', p.dataset.statsPanel !== mode);
-            if (p.dataset.statsPanel === mode) caption.textContent = p.dataset.caption;
-        });
-    };
-    section.querySelectorAll('[data-stats-mode]').forEach(b => b.addEventListener('click', () => show(b.dataset.statsMode)));
-    show('all');
-})();
-</script>
-@endpush
-@endif
 
 @if($chart->count() >= 2)
 @push('scripts')
