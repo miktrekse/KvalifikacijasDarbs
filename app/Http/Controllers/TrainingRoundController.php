@@ -22,12 +22,29 @@ class TrainingRoundController extends Controller
 
     public function index()
     {
-        $rounds = TrainingRound::with(['user', 'players'])
-            ->whereHas('players', fn ($query) => $query->where('user_id', Auth::id()))
+        $mine = fn ($query) => $query->where('user_id', Auth::id());
+
+        $rounds = TrainingRound::with(['user', 'players', 'holes.shots'])
+            ->whereHas('players', $mine)
             ->orderByDesc('created_at')
             ->paginate(10);
 
-        return view('training.index', compact('rounds'));
+        // Career numbers across every round, counting only the current player's throws
+        $allRounds = TrainingRound::with(['players' => $mine, 'holes.shots' => $mine])
+            ->whereHas('players', $mine)
+            ->get();
+        $myTotals = $allRounds->map(fn (TrainingRound $round) => ['round' => $round] + ($round->playerTotals()->get(Auth::id()) ?? ['thru' => 0]));
+        $fullRounds = $myTotals->filter(fn ($t) => $t['thru'] > 0 && $t['thru'] === $t['round']->holes_count);
+
+        $summary = [
+            'rounds' => $allRounds->count(),
+            'in_progress' => $allRounds->where('status', '!=', 'completed')->count(),
+            'holes' => $myTotals->sum('thru'),
+            'best' => $fullRounds->sortBy('relative')->first(),
+            'average' => $fullRounds->isNotEmpty() ? $fullRounds->avg('relative') : null,
+        ];
+
+        return view('training.index', compact('rounds', 'summary'));
     }
 
     public function create()

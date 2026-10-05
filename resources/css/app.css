@@ -410,6 +410,18 @@
     .ds-board-row { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr) auto auto; align-items: center; gap: 0.75rem; padding: 0.6rem 0.25rem; border-top: 1px dashed var(--color-line); }
     .ds-board-row:first-child { border-top: 0; }
 
+    /* ---------- Training round list ---------- */
+    .ds-round { display: block; padding: 1.25rem; border-radius: 1.4rem; background: var(--color-chalk); border: 1px solid var(--color-line); box-shadow: var(--shadow-sm); transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; }
+    .ds-round:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: var(--color-indigo-300); }
+    .ds-rel--lg { padding: 0.1rem 0.55rem; border-radius: 0.6rem; font-family: var(--font-display); font-size: 1.6rem; letter-spacing: -0.03em; line-height: 1.15; }
+    .ds-minicard { display: grid; grid-template-columns: repeat(var(--holes), minmax(0, 1fr)); gap: 3px; margin-top: 1rem; }
+    .ds-minicard span { height: 0.85rem; border-radius: 3px; background: var(--color-gray-100); box-shadow: inset 0 0 0 1px var(--color-gray-200); }
+    .ds-minicard .is-par { background: var(--color-gray-300); box-shadow: none; }
+    .ds-minicard .is-birdie { background: #22a268; box-shadow: none; }
+    .ds-minicard .is-eagle, .ds-minicard .is-ace { background: #f5b700; box-shadow: none; }
+    .ds-minicard .is-bogey { background: #f9a27f; box-shadow: none; }
+    .ds-minicard .is-double { background: #b91c1c; box-shadow: none; }
+
     /* ---------- Auth (login / register) ---------- */
     .ds-auth { display: grid; min-height: 100vh; grid-template-columns: minmax(0, 1fr); }
     .ds-auth__art {
