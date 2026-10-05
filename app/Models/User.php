@@ -141,6 +141,12 @@ class User extends Authenticatable
         return $this->hasMany(CompetitionRegistration::class);
     }
 
+    /** Rated tournament rounds, newest first: the player's tournament log. */
+    public function roundRatings(): HasMany
+    {
+        return $this->hasMany(RoundRating::class)->orderByDesc('played_at')->orderByDesc('id');
+    }
+
     public function trainingRounds(): HasMany
     {
         return $this->hasMany(TrainingRound::class);

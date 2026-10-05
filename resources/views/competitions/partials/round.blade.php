@@ -90,6 +90,11 @@
                                         <span class="font-mono text-sm font-bold text-gray-500">{{ $row['thru'] ? ($tied ? 'T' : '') . ($better + 1) : '–' }}</span>
                                         <a href="{{ route('profile.show', $row['user']) }}" class="truncate text-sm font-semibold text-gray-800 hover:text-indigo-700">{{ $row['user']->name }}</a>
                                         <span class="font-mono text-[0.68rem] text-gray-500">{{ $row['thru'] ? ($row['thru'] >= $competition->holes ? 'F' : 'thru ' . $row['thru']) : 'Card ' . $row['group'] }}</span>
+                                        <span class="min-w-[2.6rem] text-right font-mono text-xs font-bold text-ink" title="Round rating">
+                                            @if($row['round_rating'] !== null)
+                                                <span class="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-[#7c4dde] align-middle" aria-hidden="true"></span>{{ $row['round_rating'] }}
+                                            @endif
+                                        </span>
                                         <span class="ds-rel {{ $row['relative'] < 0 ? 'is-under' : ($row['relative'] > 0 ? 'is-over' : 'is-even') }}">
                                             {{ $row['thru'] ? ($row['relative'] === 0 ? 'E' : ($row['relative'] > 0 ? '+' : '') . $row['relative']) : '–' }}
                                         </span>

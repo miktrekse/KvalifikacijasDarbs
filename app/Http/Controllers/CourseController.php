@@ -5,12 +5,94 @@ namespace App\Http\Controllers;
 use App\Support\CuratedCourses;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 class CourseController extends Controller
 {
+    /**
+     * Public Overpass servers in the order we try them, and whether each can run
+     * "inside this country's border" (area) queries. Servers that fail or say they
+     * are busy are skipped for a while.
+     */
+    private const OVERPASS_ENDPOINTS = [
+        'https://overpass-api.de/api/interpreter' => true,
+        'https://overpass.openstreetmap.fr/api/interpreter' => false,
+        'https://overpass.kumi.systems/api/interpreter' => true,
+        'https://overpass.private.coffee/api/interpreter' => true,
+    ];
+
+    /**
+     * Bounding boxes (south,west,north,east) for each supported country; big countries
+     * are split into chunks so each query stays small. Used for the rectangle queries
+     * that work on every server, and to narrow area queries for the chunked countries.
+     */
+    public const COUNTRY_BOXES = [
+        'LV' => ['55.6,20.9,58.1,28.3'],
+        'GB' => ['49.8,-8.7,60.9,1.8'],
+        'IE' => ['51.4,-10.7,55.4,-5.9'],
+        'DE' => ['47.2,5.8,55.1,15.1'],
+        'NL' => ['50.7,3.3,53.6,7.3'],
+        'DK' => ['54.5,8.0,57.8,15.2'],
+        'SE' => ['55.3,10.9,69.1,24.2'],
+        'NO' => ['57.9,4.5,71.2,31.2'],
+        'FI' => ['59.7,20.5,70.1,31.6'],
+        'AT' => ['46.3,9.5,49.1,17.2'],
+        'CH' => ['45.8,5.9,47.9,10.5'],
+        'FR' => ['41.3,-5.2,51.1,9.6'],
+        'ES' => ['35.9,-9.4,43.8,4.4'],
+        'IT' => ['36.6,6.6,47.1,18.6'],
+        'NZ' => ['-47.4,166.3,-34.3,178.6'],
+        'US' => [
+            '24.3,-125,33,-110', '24.3,-110,33,-96', '24.3,-96,33,-84', '24.3,-84,33,-66.9',
+            '33,-125,41,-110', '33,-110,41,-96', '33,-96,41,-84', '33,-84,41,-66.9',
+            '41,-125,49.4,-110', '41,-110,49.4,-96', '41,-96,49.4,-84', '41,-84,49.4,-66.9',
+        ],
+        'CA' => [
+            '41.7,-141,50,-110', '41.7,-110,50,-85', '41.7,-85,50,-52.6',
+            '50,-141,83.2,-110', '50,-110,83.2,-85', '50,-85,83.2,-52.6',
+        ],
+        'AU' => [
+            '-43.7,113,-30,133', '-43.7,133,-35,153.7', '-35,140,-30,153.7',
+            '-30,113,-10.7,133', '-30,133,-10.7,153.7', '-35,133,-30,140',
+        ],
+    ];
+
+    // Course pins rarely change, so cached results are reused for hours
+    private const COUNTRY_TTL = 12 * 3600;
+    private const NEARBY_TTL = 6 * 3600;
+    private const HOLES_TTL = 24 * 3600;
+
+    /**
+     * Seconds a visitor may wait on OpenStreetMap. Picking a country is a deliberate search,
+     * so it may wait longer; "near me" and hole lookups fall back to cached data sooner.
+     */
+    private const COUNTRY_BUDGET = 35;
+    private const NEARBY_BUDGET = 12;
+
+    private int $budgetSeconds = self::NEARBY_BUDGET;
+
+    /** The cache warmer refetches even when a fresh copy exists. */
+    private bool $refresh = false;
+
+    /**
+     * Pre-loads a country's courses into the cache (used by the daily courses:warm job),
+     * with a more patient budget than a visitor gets. Returns how many courses were cached,
+     * or null if OpenStreetMap could not be reached.
+     */
+    public function warm(string $country): ?int
+    {
+        $this->budgetSeconds = 120;
+        $this->refresh = true;
+
+        $response = $this->data(Request::create('/courses/data', 'GET', ['country' => $country]));
+
+        return $response->getStatusCode() === 200 && ($response->getData(true)['source'] ?? null) === 'OpenStreetMap'
+            ? (int) $response->getData(true)['total']
+            : null;
+    }
+
     public function index()
     {
         return view('courses.index');
@@ -24,10 +106,7 @@ class CourseController extends Controller
             && $latitude >= -90 && $latitude <= 90
             && $longitude >= -180 && $longitude <= 180;
         $country = strtoupper((string) $request->query('country', 'GB'));
-        $countries = [
-            'GB', 'US', 'CA', 'AU', 'DE', 'SE', 'FI', 'NL', 'NZ',
-            'NO', 'DK', 'AT', 'CH', 'FR', 'ES', 'IT', 'IE', 'LV',
-        ];
+        $countries = array_keys(self::COUNTRY_BOXES);
 
         if (!$isNearbySearch && !in_array($country, $countries, true)) {
             return response()->json([
@@ -41,70 +120,77 @@ class CourseController extends Controller
             $successfulQuery = false;
         try {
             $nearbyBounds = null;
+            $nearbyKey = null;
             if ($isNearbySearch) {
-                $latitudeDelta = 150 / 111.32;
-                $longitudeDelta = 150 / (111.32 * max(cos(deg2rad((float) $latitude)), 0.1));
-                $nearbyBounds = ((float) $latitude - $latitudeDelta) . ',' . ((float) $longitude - $longitudeDelta) . ','
-                    . ((float) $latitude + $latitudeDelta) . ',' . ((float) $longitude + $longitudeDelta);
+                // Round the centre to ~5 km so people searching from nearby spots share one cached
+                // query; the box gets a 10 km margin and results are trimmed to the exact 150 km below.
+                $centreLat = round((float) $latitude / 0.05) * 0.05;
+                $centreLon = round((float) $longitude / 0.05) * 0.05;
+                $latitudeDelta = 160 / 111.32;
+                $longitudeDelta = 160 / (111.32 * max(cos(deg2rad($centreLat)), 0.1));
+                $nearbyBounds = ($centreLat - $latitudeDelta) . ',' . ($centreLon - $longitudeDelta) . ','
+                    . ($centreLat + $latitudeDelta) . ',' . ($centreLon + $longitudeDelta);
+                $nearbyKey = sprintf('%.2f,%.2f', $centreLat, $centreLon);
             }
 
-            $chunks = $isNearbySearch ? [null] : [
-                'US' => [
-                    '24.3,-125,37,-96', '24.3,-96,37,-66.9',
-                    '37,-125,49.4,-96', '37,-96,49.4,-66.9',
-                ],
-                'CA' => [
-                    '41.7,-141,55,-100', '41.7,-100,55,-52.6',
-                    '55,-141,83.2,-100', '55,-100,83.2,-52.6',
-                ],
-                'AU' => [
-                    '-43.7,113,-25,133', '-43.7,133,-25,153.7',
-                    '-25,113,-10.7,133', '-25,133,-10.7,153.7',
-                ],
-            ][$country] ?? [null];
+            $wanted = '(nwr["leisure"="disc_golf_course"]%1$s;nwr["sport"="disc_golf"]%1$s;);out center;';
+            if ($isNearbySearch) {
+                $queries = collect(['nearby:' . $nearbyKey => [
+                    'bbox' => '[out:json][timeout:25];' . sprintf($wanted, '(' . $nearbyBounds . ')'),
+                ]]);
+            } else {
+                $this->budgetSeconds = max($this->budgetSeconds, self::COUNTRY_BUDGET);
+                $boxes = self::COUNTRY_BOXES[$country];
+                $queries = collect($boxes)->mapWithKeys(fn (string $box, int $index) => ['country:' . $country . ':' . $index => [
+                    // Precise: only courses inside the country's border (needs a server with area support)
+                    'area' => '[out:json][timeout:25];area["ISO3166-1"="' . $country . '"]["boundary"="administrative"]->.searchArea;'
+                        . sprintf($wanted, count($boxes) > 1 ? '(area.searchArea)(' . $box . ')' : '(area.searchArea)'),
+                    // Fallback: the country's rectangle, which works everywhere but may include courses just over a border
+                    'bbox' => '[out:json][timeout:25];' . sprintf($wanted, '(' . $box . ')'),
+                ]]);
+            }
 
             $elements = collect();
-            $queries = collect($chunks)->map(function (?string $chunk) use ($isNearbySearch, $nearbyBounds, $country) {
-                if ($isNearbySearch) {
-                    return '[out:json][timeout:35];(nwr["leisure"="disc_golf_course"](' . $nearbyBounds . ');nwr["sport"="disc_golf"](' . $nearbyBounds . '););out center;';
-                }
 
-                $area = $chunk ? '(area.searchArea)(' . $chunk . ')' : '(area.searchArea)';
-                return '[out:json][timeout:35];area["ISO3166-1"="' . $country . '"]["boundary"="administrative"]->.searchArea;(nwr["leisure"="disc_golf_course"]' . $area . ';nwr["sport"="disc_golf"]' . $area . ';);out center;';
-            });
+            // Country course lists are cached (and warmed daily), so a nearby search inside a covered
+            // country can be answered straight from them without asking OpenStreetMap at all.
+            if ($isNearbySearch && !$this->refresh) {
+                $known = $this->cachedCountryElements($countries);
+                $coversVisitor = $known->contains(function (array $element) use ($latitude, $longitude) {
+                    $lat = $element['lat'] ?? $element['center']['lat'] ?? null;
+                    $lon = $element['lon'] ?? $element['center']['lon'] ?? null;
 
-            if (!$isNearbySearch && $queries->count() > 1) {
-                $responses = Http::pool(function (Pool $pool) use ($queries) {
-                    return $queries->map(fn (string $query) => $pool
-                        ->withHeaders(['User-Agent' => 'DiscStats/1.0'])
-                        ->acceptJson()
-                        ->timeout(40)
-                        ->get('https://overpass.kumi.systems/api/interpreter', ['data' => $query]))->all();
+                    return $lat !== null && CuratedCourses::distanceKm((float) $latitude, (float) $longitude, $lat, $lon) <= 150;
                 });
-
-                foreach ($responses as $response) {
-                    if ($response->successful()) {
-                        $elements = $elements->merge($response->json('elements', []));
-                        $successfulQuery = true;
-                    }
-                }
-            } else {
-                foreach ($queries as $query) {
-                    $result = $this->runOverpassQuery($query);
-                    if ($result !== null) {
-                        $elements = $elements->merge($result);
-                        $successfulQuery = true;
-                    }
+                if ($coversVisitor) {
+                    $elements = $known;
+                    $successfulQuery = true;
+                    $queries = collect();
                 }
             }
 
+            foreach ($queries as $cacheKey => $query) {
+                $result = $this->cachedOverpass($cacheKey, $query, $isNearbySearch ? self::NEARBY_TTL : self::COUNTRY_TTL);
+                if ($result !== null) {
+                    $elements = $elements->merge($result);
+                    $successfulQuery = true;
+                }
+            }
+
+            // OpenStreetMap busy and nothing cached yet: show the hand-curated courses rather than nothing
+            $usedFallback = false;
             if (!$successfulQuery) {
+                $elements = $this->curatedElements($isNearbySearch ? null : $country);
+                $usedFallback = true;
+            }
+
+            if ($elements->isEmpty() && $usedFallback) {
                 return response()->json([
                     'courses' => [],
                     'total' => 0,
                     'source' => 'OpenStreetMap',
-                    'message' => 'OpenStreetMap is temporarily unavailable. Please try Near me again.',
-                ], 502);
+                    'message' => 'OpenStreetMap is very busy right now, so these courses could not be loaded yet. Please try again in a few minutes.',
+                ], 503);
             }
 
             $courses = $elements
@@ -137,7 +223,7 @@ class CourseController extends Controller
                         'holes' => $tags['disc_golf:holes'] ?? null,
                         'par' => $tags['disc_golf:par'] ?? null,
                         'country_code' => $isNearbySearch ? ($tags['addr:country'] ?? 'Nearby') : $country,
-                        'osm_url' => isset($element['type'], $element['id'])
+                        'osm_url' => isset($element['type'], $element['id']) && $element['type'] !== 'curated'
                             ? 'https://www.openstreetmap.org/' . $element['type'] . '/' . $element['id']
                             : null,
                     ];
@@ -188,7 +274,8 @@ class CourseController extends Controller
             return response()->json([
                 'courses' => $courses,
                 'total' => $courses->count(),
-                'source' => 'OpenStreetMap',
+                'source' => $usedFallback ? 'Curated' : 'OpenStreetMap',
+                'message' => $usedFallback ? 'OpenStreetMap is busy, so only hand-curated courses are shown for now.' : null,
                 'radius_km' => $isNearbySearch ? 150 : null,
             ]);
         } catch (RequestException|ConnectionException $exception) {
@@ -223,7 +310,7 @@ class CourseController extends Controller
             . 'node["disc_golf"="hole"](around:1200,' . $latitude . ',' . $longitude . '););'
             . 'out tags center;';
 
-        $elements = $this->runOverpassQuery($query);
+        $elements = $this->cachedOverpass(sprintf('holes:%.4f,%.4f', $latitude, $longitude), ['bbox' => $query], self::HOLES_TTL);
 
         if ($elements === null) {
             return response()->json([
@@ -257,24 +344,139 @@ class CourseController extends Controller
         ]);
     }
 
-    private function runOverpassQuery(string $query): ?array
+    /**
+     * Returns cached Overpass results, fetching them when missing. A long-lived copy
+     * is kept so a later OpenStreetMap outage serves the last good data, not an error.
+     */
+    private function cachedOverpass(string $key, array $queries, int $ttl): ?array
     {
-        $endpoints = ['https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+        $key = 'overpass:' . $key;
 
-        foreach ($endpoints as $endpoint) {
-            try {
-                $response = Http::withHeaders(['User-Agent' => 'DiscStats/1.0'])
-                    ->acceptJson()
-                    ->timeout(35)
-                    ->get($endpoint, ['data' => $query])
-                    ->throw();
+        $cached = $this->refresh ? null : Cache::get($key);
+        if ($cached !== null) {
+            return $cached;
+        }
 
-                return $response->json('elements', []);
-            } catch (RequestException|ConnectionException $exception) {
+        // A lookup that just failed isn't retried for 5 minutes, so nobody waits on it twice
+        if (!$this->refresh && Cache::has($key . ':failed')) {
+            return Cache::get($key . ':stale');
+        }
+
+        $elements = $this->runOverpassQuery($queries);
+        if ($elements !== null) {
+            Cache::put($key, $elements, $ttl);
+            Cache::put($key . ':stale', $elements, now()->addDays(90));
+            Cache::forget($key . ':failed');
+
+            return $elements;
+        }
+
+        Cache::put($key . ':failed', true, now()->addMinutes(5));
+
+        return Cache::get($key . ':stale');
+    }
+
+    /**
+     * Runs a query against the public Overpass servers within the time budget.
+     * $queries holds an 'area' (precise) and/or 'bbox' (works everywhere) version;
+     * each server gets the best version it supports.
+     */
+    private function runOverpassQuery(array $queries): ?array
+    {
+        $deadline = microtime(true) + $this->budgetSeconds;
+
+        foreach (self::OVERPASS_ENDPOINTS as $endpoint => $supportsArea) {
+            $query = ($supportsArea ? ($queries['area'] ?? null) : null) ?? $queries['bbox'] ?? null;
+            $downKey = 'overpass:down:' . md5($endpoint);
+            // Visitors skip servers marked busy; the background warm-up is patient and tries them anyway
+            if ($query === null || (!$this->refresh && Cache::has($downKey))) {
                 continue;
+            }
+
+            for ($attempt = 1; $attempt <= 2; $attempt++) {
+                $remaining = $deadline - microtime(true);
+                if ($remaining < 3) {
+                    return null;
+                }
+
+                $timeout = (int) min($this->refresh ? 100 : 30, $remaining);
+                $startedAt = microtime(true);
+
+                try {
+                    $response = Http::withHeaders(['User-Agent' => 'DiscStats/1.0'])
+                        ->acceptJson()
+                        ->connectTimeout(4)
+                        ->timeout($timeout)
+                        ->get($endpoint, ['data' => $this->refresh ? str_replace('[timeout:25]', '[timeout:90]', $query) : $query])
+                        ->throw();
+
+                    // Overloaded servers can answer 200 with an error remark and no elements;
+                    // that is a failure, not "this country has no courses".
+                    $remark = (string) $response->json('remark', '');
+                    if ($remark !== '' && preg_match('/error|timed out|out of memory|too busy/i', $remark)) {
+                        Cache::put($downKey, true, now()->addMinutes(5));
+                        continue 2;
+                    }
+
+                    return $response->json('elements', []);
+                } catch (ConnectionException $exception) {
+                    // Couldn't connect: skip this server for an hour. No answer after 10+ seconds: skip it
+                    // for 10 minutes. A short attempt cut off by our own time budget says nothing about it.
+                    $couldNotConnect = microtime(true) - $startedAt < $timeout - 1;
+                    if ($couldNotConnect) {
+                        Cache::put($downKey, true, now()->addHour());
+                    } elseif ($timeout >= 10) {
+                        Cache::put($downKey, true, now()->addMinutes(10));
+                    }
+                    continue 2;
+                } catch (RequestException $exception) {
+                    $status = $exception->response->status();
+                    // Rate limited: one short retry. Overloaded (504) or rate limited twice: rest it for a few minutes.
+                    if ($status === 429 && $attempt === 1) {
+                        usleep(1_500_000);
+                        continue;
+                    }
+                    if (in_array($status, [429, 504], true)) {
+                        Cache::put($downKey, true, now()->addMinutes($status === 504 ? 5 : 2));
+                    }
+                    continue 2;
+                }
             }
         }
 
         return null;
+    }
+
+    /** Every country course list currently in the cache, merged. */
+    private function cachedCountryElements(array $countries)
+    {
+        return collect($countries)
+            ->flatMap(fn (string $country) => collect(array_keys(self::COUNTRY_BOXES[$country] ?? []))
+                ->map(fn (int $chunk) => Cache::get('overpass:country:' . $country . ':' . $chunk) ?? Cache::get('overpass:country:' . $country . ':' . $chunk . ':stale'))
+                ->filter()
+                ->flatten(1))
+            ->values();
+    }
+
+    /**
+     * Hand-curated courses shaped like Overpass elements, used when OpenStreetMap
+     * cannot answer. Limited to one country, or all of them for a nearby search.
+     */
+    private function curatedElements(?string $country)
+    {
+        return collect(CuratedCourses::all())
+            ->filter(fn (array $course) => $country === null || ($course['country_code'] ?? null) === $country)
+            ->values()
+            ->map(fn (array $course, int $index) => [
+                'type' => 'curated',
+                'id' => 'curated-' . $index,
+                'lat' => $course['lat'],
+                'lon' => $course['lon'],
+                'tags' => [
+                    'name' => $course['name'],
+                    'addr:city' => $course['locality'] ?? null,
+                    'addr:street' => $course['address'] ?? null,
+                ],
+            ]);
     }
 }

@@ -7,6 +7,8 @@ use App\Models\Competition;
 use App\Models\CompetitionRegistration;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Course;
+use App\Support\RatingEngine;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -155,7 +157,16 @@ class CompetitionController extends Controller
         $competition->load(['groups.registrations.user', 'registrations.group']);
         $leaderboard = $competition->hasGroups() ? $competition->leaderboard() : collect();
 
-        return view('competitions.view', compact('competition', 'leaderboard'));
+        // The rated course this event is played on: linked once rated, otherwise the matching layout if it exists
+        $ratingCourse = $competition->course;
+        if (!$ratingCourse && $competition->courseHoles()->exists()) {
+            $ratingCourse = Course::where('name_key', Course::keyFor($competition->course_name ?: $competition->name))
+                ->where('holes', $competition->courseHoles()->count())
+                ->where('par', (int) $competition->courseHoles()->sum('par'))
+                ->first();
+        }
+
+        return view('competitions.view', compact('competition', 'leaderboard', 'ratingCourse'));
     }
 
     public function register(Request $request, $id)
@@ -166,8 +177,9 @@ class CompetitionController extends Controller
         $validated = $request->validate([
             'division' => ['required', Rule::in($divisionOptions)],
             'phone' => ['required', 'string', 'min:7', 'max:40', 'regex:/^[0-9+() .-]+$/'],
-            'rating' => ['nullable', 'integer', 'min:0', 'max:1100'],
         ]);
+        // Ratings come from rated tournament rounds, never from what a player types in
+        $officialRating = $request->user()->rating;
 
         $competition->syncLifecycle();
         if ($competition->hasGroups() || $competition->isClosed()) {
@@ -183,13 +195,13 @@ class CompetitionController extends Controller
         }
 
         $rule = ($competition->division_rules ?? [])[$validated['division']] ?? null;
-        if ($rule && !$this->userMeetsCustomDivision($request->user(), $rule, $validated['rating'] ?? null)) {
+        if ($rule && !$this->userMeetsCustomDivision($request->user(), $rule, $officialRating)) {
             return back()->withErrors(['division' => 'Your profile does not meet this custom division\'s requirements.'])->withInput();
         }
 
         CompetitionRegistration::updateOrCreate(
             ['competition_id' => $competition->id, 'user_id' => $request->user()->id],
-            ['division' => $validated['division'], 'phone' => $validated['phone'], 'rating' => $validated['rating'] ?? null]
+            ['division' => $validated['division'], 'phone' => $validated['phone'], 'rating' => $officialRating]
         );
 
         return back()->with('success', 'You are registered for the competition.');
@@ -275,6 +287,11 @@ class CompetitionController extends Controller
             'is_public' => $request->boolean('is_public', true),
         ]);
 
+        // Completing (or re-opening) a tournament changes its ratings and every rating after it
+        if ($competition->status === 'completed' || $competition->rated_at !== null) {
+            app(RatingEngine::class)->recalculate();
+        }
+
         if ($competition->status === 'completed') {
             $competition->registrations()->with('user')->get()
                 ->each(fn ($registration) => $registration->user?->syncVerification());
@@ -292,7 +309,12 @@ class CompetitionController extends Controller
             abort(403);
         }
 
+        $wasRated = $competition->rated_at !== null;
         $competition->delete();
+
+        if ($wasRated) {
+            app(RatingEngine::class)->recalculate();
+        }
 
         return redirect()->route('competitions.index')
             ->with('success', 'Competition deleted successfully!');

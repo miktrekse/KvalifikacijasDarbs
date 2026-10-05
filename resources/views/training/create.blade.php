@@ -221,20 +221,31 @@
             });
         }
 
+        // Only one course request at a time; leaving the page cancels it so navigation isn't held up
+        let courseRequest = null;
+        window.addEventListener('pagehide', () => courseRequest?.abort());
+
         async function loadCourses(parameters, label) {
+            courseRequest?.abort();
+            courseRequest = new AbortController();
+            const { signal } = courseRequest;
             status.textContent = `Finding ${label}...`;
-            list.innerHTML = '<p class="competition-course-picker__empty">Loading courses...</p>';
+            list.innerHTML = '<p class="competition-course-picker__empty">Loading courses… the first search for a country can take up to half a minute.</p>';
             try {
-                const response = await fetch(`/courses/data?${new URLSearchParams(parameters)}`);
-                if (!response.ok) throw new Error('Course search failed');
-                const data = await response.json();
+                const response = await fetch(`/courses/data?${new URLSearchParams(parameters)}`, { signal });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(data.message || 'Course search is temporarily unavailable.');
                 courses = (data.courses || []).filter(course => Number.isFinite(Number(course.lat)) && Number.isFinite(Number(course.lon)));
                 status.textContent = `${courses.length} courses available${parameters.lat ? ' within 150 km' : ''}`;
                 renderCourses();
                 if (courses.length) map.fitBounds(courses.map(course => [course.lat, course.lon]), { padding: [24, 24], maxZoom: parameters.lat ? 10 : 7 });
             } catch (error) {
+                if (error.name === 'AbortError') return;
                 status.textContent = 'Course search is temporarily unavailable.';
-                list.innerHTML = '<p class="competition-course-picker__empty">Try again or search another country.</p>';
+                const note = document.createElement('p');
+                note.className = 'competition-course-picker__empty';
+                note.textContent = error.message;
+                list.replaceChildren(note);
             }
         }
 

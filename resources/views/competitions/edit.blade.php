@@ -201,7 +201,19 @@
                                     </div>
                                     <button type="button" id="add-division-rule" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800">+ Add division</button>
                                 </div>
-                                @php $customDivisionRules = old('division_rules', $competition->division_rules ?? []); @endphp
+                                @php
+                                    // Saved rules, plus any custom division names without rules (older events), so saving keeps them
+                                    $standardDivisions = ['MPO', 'MA1', 'MA2', 'MA3', 'MA4', 'FPO', 'FA2', 'FA3', 'FA4', 'MP60', 'MP50', 'MP40', 'FP40', 'MJ18', 'MJ15', 'FJ18'];
+                                    $customDivisionRules = $competition->division_rules ?? [];
+                                    foreach ($competition->divisionsArray as $savedDivision) {
+                                        if (!in_array($savedDivision, $standardDivisions, true) && !isset($customDivisionRules[$savedDivision])) {
+                                            $customDivisionRules[$savedDivision] = ['gender' => 'any', 'min_age' => null, 'max_age' => null, 'min_rating' => null];
+                                        }
+                                    }
+                                    if (old('division_rules')) {
+                                        $customDivisionRules = collect(old('division_rules'))->mapWithKeys(fn ($rule) => [$rule['name'] ?? '' => $rule])->all();
+                                    }
+                                @endphp
                                 <div id="division-rules" class="mt-3 space-y-3">
                                     @foreach($customDivisionRules as $index => $rule)
                                         <div class="competition-division-rule">
@@ -272,14 +284,11 @@
                 </div>
 
                 <div class="flex items-center justify-between pt-4">
-                    <form method="POST" action="{{ route('competitions.destroy', $competition->id) }}" class="inline" onsubmit="return confirm('Are you sure you want to delete this competition?');">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
-                            Delete Competition
-                        </button>
-                    </form>
-                    
+                    {{-- Submits the separate delete form below; forms can't be nested, or its DELETE would leak into this update --}}
+                    <button type="submit" form="delete-competition-form" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                        Delete Competition
+                    </button>
+
                     <div class="flex items-center">
                         <a href="{{ route('competitions.view', $competition->id) }}" class="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition mr-3">
                             Cancel
@@ -289,6 +298,11 @@
                         </button>
                     </div>
                 </div>
+            </form>
+
+            <form id="delete-competition-form" method="POST" action="{{ route('competitions.destroy', $competition->id) }}" class="hidden" onsubmit="return confirm('Are you sure you want to delete this competition?');">
+                @csrf
+                @method('DELETE')
             </form>
         </div>
     </div>

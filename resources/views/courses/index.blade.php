@@ -215,10 +215,17 @@
         });
     });
 
+    // Only one course request at a time; leaving the page cancels it so navigation isn't held up
+    let courseRequest = null;
+    window.addEventListener('pagehide', () => courseRequest?.abort());
+
     async function loadCourses(latitude = null, longitude = null) {
+        courseRequest?.abort();
+        courseRequest = new AbortController();
+        const { signal } = courseRequest;
         const isNearbySearch = latitude !== null && longitude !== null;
         statusText.textContent = isNearbySearch ? 'Finding courses within 150 km' : 'Choose a country or use Near me';
-        courseList.innerHTML = '<div class="course-finder__empty">Loading the course directory...</div>';
+        courseList.innerHTML = '<div class="course-finder__empty">Loading courses… the first search for a country can take up to half a minute.</div>';
         try {
             const selectedCountry = countryOptions.find(option => option.value.toLowerCase() === countryFilter.value.trim().toLowerCase());
             if (!isNearbySearch && !selectedCountry) {
@@ -233,22 +240,29 @@
             const params = isNearbySearch
                 ? new URLSearchParams({ lat: latitude, lon: longitude })
                 : new URLSearchParams({ country: countryCode, limit: 500 });
-            const response = await fetch(`${courseDataUrl}?${params}`);
-            if (!response.ok) throw new Error('Unable to load courses');
-            const data = await response.json();
+            const response = await fetch(`${courseDataUrl}?${params}`, { signal });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.message || 'Course data is temporarily unavailable. Please try again.');
             courseItems = (data.courses || []).filter(course => Number.isFinite(Number(course.lat)) && Number.isFinite(Number(course.lon)));
             statusText.textContent = isNearbySearch
                 ? `${data.total || courseItems.length} courses within 150 km`
                 : `${data.total || courseItems.length} courses indexed`;
             renderCourses();
+            if (data.message) {
+                courseList.insertAdjacentHTML('afterbegin', `<div class="course-finder__empty">${data.message}</div>`);
+            }
             if (courseItems.length && (isNearbySearch || countryCode !== 'World')) {
                 map.fitBounds(courseItems.map(course => [course.lat, course.lon]), { padding: [36, 36], maxZoom: 7 });
             } else {
                 map.setView([20, 0], 2);
             }
         } catch (error) {
+            if (error.name === 'AbortError') return;
             statusText.textContent = 'Could not load courses';
-            courseList.innerHTML = '<div class="course-finder__empty">Course data is temporarily unavailable. Please try again.</div>';
+            const note = document.createElement('div');
+            note.className = 'course-finder__empty';
+            note.textContent = error.message;
+            courseList.replaceChildren(note);
         }
     }
 

@@ -139,7 +139,11 @@ class CompetitionScoringController extends Controller
             ]);
         });
 
+        // The last putt of the last card finishes the tournament and rates it
+        $finished = $shot->result === 'in_basket' && $competition->refresh()->finishIfComplete();
+
         return response()->json([
+            'finished' => $finished,
             'shot' => [
                 'shotNumber' => $shot->shot_number,
                 'result' => $shot->result,

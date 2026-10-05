@@ -132,6 +132,36 @@
                         <p class="text-sm text-gray-500">{{ $competition->holes }} holes</p>
                     </div>
                 </div>
+
+                {{-- Course rating: what par is worth here and how this event moved it --}}
+                @php
+                    $parRating = $competition->course_rating_after ?? $ratingCourse?->par_rating ?? \App\Models\Course::BASE_PAR_RATING;
+                    $perStroke = $ratingCourse?->points_per_stroke ?? \App\Models\Course::POINTS_PER_STROKE;
+                    $moved = $competition->course_rating_before !== null ? round($competition->course_rating_after - $competition->course_rating_before, 1) : null;
+                @endphp
+                <div class="mt-4 grid grid-cols-3 gap-2 rounded-2xl bg-gray-50 p-3 text-center">
+                    <div>
+                        <p class="ds-stat__label">Par rating</p>
+                        <p class="mt-1 font-display text-2xl font-extrabold text-ink">{{ number_format($parRating, 0) }}</p>
+                    </div>
+                    <div>
+                        <p class="ds-stat__label">Per stroke</p>
+                        <p class="mt-1 font-display text-2xl font-extrabold text-ink">±{{ rtrim(rtrim(number_format($perStroke, 2), '0'), '.') }}</p>
+                    </div>
+                    <div>
+                        <p class="ds-stat__label">Rated rounds</p>
+                        <p class="mt-1 font-display text-2xl font-extrabold text-ink">{{ $ratingCourse?->rated_rounds ?? 0 }}</p>
+                    </div>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">
+                    A par round here is rated {{ number_format($parRating, 0) }}; each stroke under or over par is worth {{ rtrim(rtrim(number_format($perStroke, 2), '0'), '.') }} points
+                    (−3 ≈ {{ round($parRating + 3 * $perStroke) }}, +2 ≈ {{ round($parRating - 2 * $perStroke) }}).
+                    @if($moved !== null)
+                        This tournament moved the course rating {{ $moved >= 0 ? 'up' : 'down' }} {{ abs($moved) }} points ({{ number_format($competition->course_rating_before, 1) }} → {{ number_format($competition->course_rating_after, 1) }}) based on how the rated players scored.
+                    @elseif(!$ratingCourse)
+                        New courses start at {{ \App\Models\Course::BASE_PAR_RATING }} and adjust slightly after every rated tournament.
+                    @endif
+                </p>
             </div>
             @endif
 
@@ -303,7 +333,7 @@
 </div>
 
 @auth
-<div id="registration-modal" data-open="{{ $errors->has('division') || $errors->has('phone') || $errors->has('rating') ? 'true' : 'false' }}" class="fixed inset-0 z-50 hidden items-center justify-center bg-gray-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="registration-modal-title">
+<div id="registration-modal" data-open="{{ $errors->has('division') || $errors->has('phone') ? 'true' : 'false' }}" class="fixed inset-0 z-50 hidden items-center justify-center bg-gray-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="registration-modal-title">
     <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
         <div class="flex items-start justify-between gap-4">
             <div>
@@ -333,10 +363,12 @@
                 <input type="tel" name="phone" id="registration-phone" value="{{ old('phone') }}" required placeholder="+371 2000 0000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
                 @error('phone')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
-            <div>
-                <label for="registration-rating" class="block text-sm font-medium text-gray-700">Player rating</label>
-                <input type="number" name="rating" id="registration-rating" value="{{ old('rating') }}" min="0" max="1100" placeholder="Optional unless required by the division" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
-                @error('rating')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            <div class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3">
+                <div>
+                    <p class="text-sm font-medium text-gray-700">Player rating</p>
+                    <p class="text-xs text-gray-500">Calculated from your rated tournament rounds.</p>
+                </div>
+                <span class="font-display text-2xl font-extrabold text-ink">{{ Auth::user()->rating ?? 'Unrated' }}</span>
             </div>
             <div class="flex justify-end gap-3 pt-2">
                 <button type="button" id="cancel-registration-modal" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>

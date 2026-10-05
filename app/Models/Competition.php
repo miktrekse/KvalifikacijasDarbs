@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Support\CompetitionGrouping;
+use App\Support\RatingEngine;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -29,6 +30,7 @@ class Competition extends Model
         'format',
         'competition_type',
         'divisions',
+        'division_rules',
         'holes',
         'entry_fee',
         'currency',
@@ -44,7 +46,11 @@ class Competition extends Model
 
     protected $casts = [
         'event_date' => 'date',
+        'division_rules' => 'array',
         'groups_assigned_at' => 'datetime',
+        'rated_at' => 'datetime',
+        'course_rating_before' => 'float',
+        'course_rating_after' => 'float',
         'registration_deadline' => 'datetime',
         'entry_fee' => 'decimal:2',
         'holes' => 'integer',
@@ -63,6 +69,50 @@ class Competition extends Model
     public function registrations(): HasMany
     {
         return $this->hasMany(CompetitionRegistration::class);
+    }
+
+    /** True once every player on a card has holed out on every hole. */
+    public function allRoundsFinished(): bool
+    {
+        $players = $this->registrations()->whereNotNull('competition_group_id')->count();
+        $holes = $this->courseHoles()->count();
+        if ($players === 0 || $holes === 0) {
+            return false;
+        }
+
+        $holedOut = CompetitionShot::whereIn('competition_hole_id', $this->courseHoles()->select('id'))
+            ->where('result', 'in_basket')
+            ->whereIn('user_id', $this->registrations()->whereNotNull('competition_group_id')->select('user_id'))
+            ->count();
+
+        return $holedOut >= $players * $holes;
+    }
+
+    /**
+     * Completes the tournament as soon as the last card holes out, then rates it:
+     * round ratings, the course rating and every player's new rating.
+     */
+    public function finishIfComplete(): bool
+    {
+        if ($this->status !== 'ongoing' || !$this->allRoundsFinished()) {
+            return false;
+        }
+
+        $this->update(['status' => 'completed']);
+        app(RatingEngine::class)->recalculate();
+        $this->registrations()->with('user')->get()->each(fn ($registration) => $registration->user?->syncVerification());
+
+        return true;
+    }
+
+    public function course(): BelongsTo
+    {
+        return $this->belongsTo(Course::class);
+    }
+
+    public function roundRatings(): HasMany
+    {
+        return $this->hasMany(RoundRating::class);
     }
 
     public function groups(): HasMany
@@ -135,8 +185,9 @@ class Competition extends Model
     {
         $holes = $this->courseHoles()->with('shots')->get();
         $registrations = $this->registrations()->with(['user', 'group'])->get();
+        $roundRatings = $this->roundRatings()->get()->keyBy('user_id');
 
-        return $registrations->map(function (CompetitionRegistration $registration) use ($holes) {
+        return $registrations->map(function (CompetitionRegistration $registration) use ($holes, $roundRatings) {
             $strokes = 0;
             $par = 0;
             $thru = 0;
@@ -159,6 +210,7 @@ class Competition extends Model
                 'strokes' => $strokes,
                 'relative' => $strokes - $par,
                 'thru' => $thru,
+                'round_rating' => $roundRatings->get($registration->user_id)?->round_rating,
             ];
         })->sort(fn (array $a, array $b) => [$a['thru'] === 0, $a['relative'], $a['strokes'], $a['user']->name]
             <=> [$b['thru'] === 0, $b['relative'], $b['strokes'], $b['user']->name])->values();
