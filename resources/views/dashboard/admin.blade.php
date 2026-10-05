@@ -4,148 +4,131 @@
 
 @section('content')
 <div class="space-y-6">
-    <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
-        <div class="md:grid md:grid-cols-3 md:gap-6">
-            <div class="md:col-span-1">
-                <h3 class="text-lg font-medium leading-6 text-gray-900">Admin Panel</h3>
-                <p class="mt-1 text-sm text-gray-500">
-                    Welcome, {{ Auth::user()->name }}! You have full control over the platform.
-                </p>
+    <section class="ds-hero">
+        <div class="grid gap-8 lg:grid-cols-[1fr_1.3fr] lg:items-end">
+            <div>
+                <p class="ds-eyebrow">Control tower</p>
+                <h1 class="mt-4">Admin<br><em>panel.</em></h1>
+                <p class="mt-4 max-w-md text-sm sm:text-base">Welcome, {{ Auth::user()->name }}! You have full control over the platform.</p>
             </div>
-            <div class="mt-5 md:mt-0 md:col-span-2">
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
-                    <div class="bg-indigo-50 overflow-hidden shadow rounded-lg">
-                        <div class="px-4 py-5 sm:p-6">
-                            <dt class="text-sm font-medium text-indigo-600 truncate">Total Users</dt>
-                            <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ $totalUsers }}</dd>
-                        </div>
-                    </div>
-                    <div class="bg-green-50 overflow-hidden shadow rounded-lg">
-                        <div class="px-4 py-5 sm:p-6">
-                            <dt class="text-sm font-medium text-green-600 truncate">Total Exercises</dt>
-                            <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ $totalExercises }}</dd>
-                        </div>
-                    </div>
-                    <div class="bg-yellow-50 overflow-hidden shadow rounded-lg">
-                        <div class="px-4 py-5 sm:p-6">
-                            <dt class="text-sm font-medium text-yellow-600 truncate">Public Exercises</dt>
-                            <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ $publicExercises }}</dd>
-                        </div>
-                    </div>
-                    <div class="bg-blue-50 overflow-hidden shadow rounded-lg">
-                        <div class="px-4 py-5 sm:p-6">
-                            <dt class="text-sm font-medium text-blue-600 truncate">Total Comments</dt>
-                            <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ $totalComments }}</dd>
-                        </div>
-                    </div>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div class="ds-stat" style="--accent: #3fbd82">
+                    <p class="ds-stat__label">Users</p>
+                    <p class="ds-stat__value">{{ $totalUsers }}</p>
+                    <span class="ds-stat__ring"></span>
+                </div>
+                <div class="ds-stat" style="--accent: #f26b3a">
+                    <p class="ds-stat__label">Exercises</p>
+                    <p class="ds-stat__value">{{ $totalExercises }}</p>
+                    <span class="ds-stat__ring"></span>
+                </div>
+                <div class="ds-stat" style="--accent: #c6f36b">
+                    <p class="ds-stat__label">Public</p>
+                    <p class="ds-stat__value">{{ $publicExercises }}</p>
+                    <span class="ds-stat__ring"></span>
+                </div>
+                <div class="ds-stat" style="--accent: #7cc9ff">
+                    <p class="ds-stat__label">Comments</p>
+                    <p class="ds-stat__value">{{ $totalComments }}</p>
+                    <span class="ds-stat__ring"></span>
                 </div>
             </div>
         </div>
-    </div>
+    </section>
 
-    <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
-        <div class="md:grid md:grid-cols-3 md:gap-6">
-            <div class="md:col-span-1">
-                <h3 class="text-lg font-medium leading-6 text-gray-900">Quick Actions</h3>
-                <p class="mt-1 text-sm text-gray-500">
-                    Manage platform content and users.
-                </p>
-            </div>
-            <div class="mt-5 md:mt-0 md:col-span-2">
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <a href="{{ route('admin.users') }}" class="flex flex-row items-center justify-center p-3 border-2 border-indigo-100 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition gap-3">
-                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                        </svg>
-                        <span class="text-sm font-medium text-gray-700">Manage Users</span>
-                    </a>
-                    <a href="{{ route('admin.exercises') }}" class="flex flex-row items-center justify-center p-3 border-2 border-green-100 rounded-lg hover:border-green-500 hover:bg-green-50 transition gap-3">
-                        <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
-                        </svg>
-                        <span class="text-sm font-medium text-gray-700">Manage Exercises</span>
-                    </a>
-                    <a href="{{ route('admin.categories') }}" class="flex flex-row items-center justify-center p-3 border-2 border-yellow-100 rounded-lg hover:border-yellow-500 hover:bg-yellow-50 transition gap-3">
-                        <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
-                        </svg>
-                        <span class="text-sm font-medium text-gray-700">Categories</span>
-                    </a>
-                    <a href="{{ route('admin.comments') }}" class="flex flex-row items-center justify-center p-3 border-2 border-blue-100 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition gap-3">
-                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                        </svg>
-                        <span class="text-sm font-medium text-gray-700">Comments</span>
-                    </a>
-                </div>
-            </div>
+    <section>
+        <div class="mb-3 flex items-end justify-between">
+            <h2 class="font-display text-xl font-extrabold text-ink">Quick actions</h2>
+            <span class="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-gray-400">Manage content &amp; users</span>
         </div>
-    </div>
+        <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            <a href="{{ route('admin.users') }}" class="ds-tile" style="--accent: #22a268">
+                <span class="ds-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/><circle cx="9" cy="7" r="4"/></svg></span>
+                <span><span class="ds-tile__title block">Manage users</span><span class="ds-tile__text block">Roles, accounts, verification.</span></span>
+                <span class="ds-tile__arrow">↗</span>
+            </a>
+            <a href="{{ route('admin.exercises') }}" class="ds-tile" style="--accent: #f26b3a">
+                <span class="ds-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg></span>
+                <span><span class="ds-tile__title block">Manage exercises</span><span class="ds-tile__text block">Edit or remove any drill.</span></span>
+                <span class="ds-tile__arrow">↗</span>
+            </a>
+            <a href="{{ route('admin.categories') }}" class="ds-tile" style="--accent: #eab308">
+                <span class="ds-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01"/></svg></span>
+                <span><span class="ds-tile__title block">Categories</span><span class="ds-tile__text block">Organise the drill library.</span></span>
+                <span class="ds-tile__arrow">↗</span>
+            </a>
+            <a href="{{ route('admin.comments') }}" class="ds-tile" style="--accent: #0ea5e9">
+                <span class="ds-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+                <span><span class="ds-tile__title block">Comments</span><span class="ds-tile__text block">Moderate the conversation.</span></span>
+                <span class="ds-tile__arrow">↗</span>
+            </a>
+        </div>
+    </section>
 
-    <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-medium leading-6 text-gray-900">Recent Users</h3>
-            <a href="{{ route('admin.users') }}" class="text-sm text-indigo-600 hover:text-indigo-800">View all</a>
-        </div>
-        @if($recentUsers->count() > 0)
-            <ul class="divide-y divide-gray-200">
-                @foreach($recentUsers as $user)
-                    <li class="py-3 flex items-center justify-between">
-                        <div class="flex items-center">
-                            <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                                <span class="text-indigo-600 font-semibold text-sm">{{ substr($user->name, 0, 1) }}</span>
-                            </div>
-                            <div class="ml-3">
-                                <p class="text-sm font-medium text-gray-900">{{ $user->name }}</p>
-                                <p class="text-xs text-gray-500">{{ $user->email }}</p>
+    <div class="grid gap-6 lg:grid-cols-2">
+        <section class="ds-card">
+            <div class="ds-card__head">
+                <h2 class="ds-card__title">Recent users</h2>
+                <a href="{{ route('admin.users') }}" class="text-sm font-bold text-indigo-600 hover:text-indigo-800">View all →</a>
+            </div>
+            <div class="ds-card__body">
+                @forelse($recentUsers as $user)
+                    <div class="ds-row">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <span class="ds-avatar" style="width: 2.4rem; height: 2.4rem;">
+                                @if($user->avatar)
+                                    <img src="{{ asset('storage/' . $user->avatar) }}" alt="">
+                                @else
+                                    <span>{{ strtoupper(substr($user->name, 0, 1)) }}</span>
+                                @endif
+                            </span>
+                            <div class="min-w-0">
+                                <p class="truncate text-sm font-bold text-ink">{{ $user->name }}</p>
+                                <p class="truncate text-xs text-gray-500">{{ $user->email }}</p>
                             </div>
                         </div>
-                        <div class="flex items-center">
-                            @if($user->isAdmin())
-                                <span class="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">Admin</span>
-                            @else
-                                <span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">User</span>
-                            @endif
-                        </div>
-                    </li>
-                @endforeach
-            </ul>
-        @else
-            <p class="text-sm text-gray-500">No users yet.</p>
-        @endif
-    </div>
+                        @if($user->isAdmin())
+                            <span class="ds-pill bg-flight-soft text-[#b4401a]">Admin</span>
+                        @elseif($user->isVerified())
+                            <span class="ds-pill bg-indigo-100 text-indigo-800">Verified</span>
+                        @else
+                            <span class="ds-pill bg-gray-100 text-gray-600">User</span>
+                        @endif
+                    </div>
+                @empty
+                    <p class="text-sm text-gray-500">No users yet.</p>
+                @endforelse
+            </div>
+        </section>
 
-    <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-medium leading-6 text-gray-900">Recent Exercises</h3>
-            <a href="{{ route('admin.exercises') }}" class="text-sm text-indigo-600 hover:text-indigo-800">View all</a>
-        </div>
-        @if($recentExercises->count() > 0)
-            <ul class="divide-y divide-gray-200">
-                @foreach($recentExercises as $exercise)
-                    <li class="py-3 flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-gray-900">{{ $exercise->title }}</p>
+        <section class="ds-card">
+            <div class="ds-card__head">
+                <h2 class="ds-card__title">Recent exercises</h2>
+                <a href="{{ route('admin.exercises') }}" class="text-sm font-bold text-indigo-600 hover:text-indigo-800">View all →</a>
+            </div>
+            <div class="ds-card__body">
+                @forelse($recentExercises as $exercise)
+                    <div class="ds-row">
+                        <div class="min-w-0">
+                            <p class="truncate text-sm font-bold text-ink">{{ $exercise->title }}</p>
                             <p class="text-xs text-gray-500">By {{ $exercise->user->name ?? 'Unknown' }}</p>
                         </div>
-                        <div class="flex items-center space-x-2">
+                        <div class="flex shrink-0 items-center gap-2">
                             @if($exercise->is_public)
-                                <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Public</span>
+                                <span class="ds-pill bg-indigo-100 text-indigo-800">Public</span>
                             @else
-                                <span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">Private</span>
+                                <span class="ds-pill bg-gray-100 text-gray-600">Private</span>
                             @endif
-                            <a href="{{ route('admin.exercises.edit', $exercise->id) }}" class="text-gray-400 hover:text-indigo-600">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                </svg>
+                            <a href="{{ route('admin.exercises.edit', $exercise->id) }}" class="grid h-8 w-8 place-items-center rounded-full text-gray-400 transition hover:bg-indigo-50 hover:text-indigo-600" title="Edit">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
                             </a>
                         </div>
-                    </li>
-                @endforeach
-            </ul>
-        @else
-            <p class="text-sm text-gray-500">No exercises yet.</p>
-        @endif
+                    </div>
+                @empty
+                    <p class="text-sm text-gray-500">No exercises yet.</p>
+                @endforelse
+            </div>
+        </section>
     </div>
 </div>
 @endsection

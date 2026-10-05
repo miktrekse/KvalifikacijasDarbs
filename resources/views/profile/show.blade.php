@@ -4,35 +4,38 @@
 
 @section('content')
 <div class="mx-auto max-w-6xl space-y-6 py-4 sm:py-8">
-    <section class="overflow-hidden rounded-xl bg-white shadow-md">
-        <div class="h-32 bg-gradient-to-r from-indigo-700 via-indigo-600 to-cyan-600"></div>
-        <div class="px-5 pb-6 sm:px-8">
-            <div class="-mt-14 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div class="flex items-end gap-4">
+    <section class="ds-hero">
+        <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+            <div class="flex flex-col gap-5 sm:flex-row sm:items-end">
+                <span class="ds-avatar shadow-2xl" style="width: 7.5rem; height: 7.5rem; border-radius: 2rem; font-size: 2.75rem;">
                     @if($user->avatar)
-                        <img src="{{ asset('storage/' . $user->avatar) }}" alt="{{ $user->name }}" class="h-28 w-28 rounded-2xl border-4 border-white object-cover shadow-lg">
+                        <img src="{{ asset('storage/' . $user->avatar) }}" alt="{{ $user->name }}" style="border-radius: 2rem;">
                     @else
-                        <div class="flex h-28 w-28 items-center justify-center rounded-2xl border-4 border-white bg-indigo-100 text-4xl font-bold text-indigo-700 shadow-lg">{{ strtoupper(substr($user->name, 0, 1)) }}</div>
+                        <span style="border-radius: 1.85rem; width: calc(100% - 6px); height: calc(100% - 6px);">{{ strtoupper(substr($user->name, 0, 1)) }}</span>
                     @endif
-                    <div class="pb-1">
-                        <h1 class="text-2xl font-bold text-gray-900">{{ $user->name }}</h1>
-                        <p class="text-sm text-gray-500">{{ ucfirst($user->gender) }} · Member since {{ $user->created_at->format('M Y') }}</p>
-                    </div>
+                </span>
+                <div>
+                    <p class="ds-eyebrow">Player card</p>
+                    <h1 class="ds-profile-name mt-3">{{ $user->name }}</h1>
+                    <p class="mt-2 text-sm">{{ ucfirst($user->gender) }} · Member since {{ $user->created_at->format('M Y') }}</p>
                 </div>
-                @auth
-                    @if(Auth::id() === $user->id)
-                        <a href="#profile-settings" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Edit profile</a>
-                    @endif
-                @endauth
             </div>
+            @auth
+                @if(Auth::id() === $user->id)
+                    <a href="#profile-settings" class="ds-btn ds-btn--flight self-start sm:self-auto">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                        Edit profile
+                    </a>
+                @endif
+            @endauth
         </div>
     </section>
 
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-gray-500">Current rating</p><p class="mt-1 text-3xl font-bold text-indigo-700">{{ $user->rating ?? '—' }}</p></div>
-        <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-gray-500">Tournaments played</p><p class="mt-1 text-3xl font-bold text-gray-900">{{ $playedCompetitions->count() }}</p></div>
-        <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-gray-500">Tournaments registered</p><p class="mt-1 text-3xl font-bold text-gray-900">{{ $registeredCompetitions->count() }}</p></div>
-        <div class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-gray-500">Divisions entered</p><p class="mt-1 text-3xl font-bold text-gray-900">{{ $registeredCompetitions->pluck('division')->unique()->count() }}</p></div>
+        <div class="ds-stat" style="--accent: #22a268"><p class="ds-stat__label">Current rating</p><p class="ds-stat__value text-indigo-700">{{ $user->rating ?? '—' }}</p><span class="ds-stat__ring"></span></div>
+        <div class="ds-stat" style="--accent: #f26b3a"><p class="ds-stat__label">Tournaments played</p><p class="ds-stat__value">{{ $playedCompetitions->count() }}</p><span class="ds-stat__ring"></span></div>
+        <div class="ds-stat" style="--accent: #8b5cf6"><p class="ds-stat__label">Registered</p><p class="ds-stat__value">{{ $registeredCompetitions->count() }}</p><span class="ds-stat__ring"></span></div>
+        <div class="ds-stat" style="--accent: #0ea5e9"><p class="ds-stat__label">Divisions entered</p><p class="ds-stat__value">{{ $registeredCompetitions->pluck('division')->unique()->count() }}</p><span class="ds-stat__ring"></span></div>
     </div>
 
     <section class="rounded-xl bg-white p-5 shadow-md sm:p-7">

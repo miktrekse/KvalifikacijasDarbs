@@ -3,129 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'DiscStats - Dashboard')</title>
+    <title>@yield('title', 'Dashboard') · DiscStats</title>
+    <link rel="icon" href="{{ asset('images/logo.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@500;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="bg-gray-100 min-h-screen overflow-x-hidden">
-    <nav class="bg-white shadow relative w-full">
-        <div class="max-w-4xl mx-auto px-2 sm:px-4">
-            <div class="flex justify-between h-16">
-                <div class="flex">
-                    <div class="flex-shrink-0 flex items-center">
-                        <a href="/dashboard" class="text-lg sm:text-xl font-bold text-indigo-600">
-                            DiscStats
-                        </a>
-                    </div>
-                    <div class="hidden sm:ml-6 sm:flex sm:space-x-6">
-                        <a href="/dashboard" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            Dashboard
-                        </a>
-                        <a href="/exercises/create" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            Create Exercise
-                        </a>
-                        <a href="/exercises/saved" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            My Saved
-                        </a>
-                        <a href="/competitions" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            Competitions
-                        </a>
-                        <a href="{{ route('training.index') }}" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            Training Rounds
-                        </a>
-                        <a href="{{ route('courses.index') }}" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            Courses Map
-                        </a>
-                    </div>
-                </div>
-                <div class="flex items-center">
-                    <button type="button" class="sm:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none" id="mobile-menu-btn">
-                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                        </svg>
+<body class="min-h-screen overflow-x-hidden">
+    @php
+        $user = Auth::user();
+        $roleLabel = $user->isAdmin() ? 'Admin' : ($user->isVerified() ? 'Verified' : 'Player');
+        $navItems = [
+            ['url' => url('/dashboard'), 'label' => 'Dashboard', 'active' => request()->is('dashboard', 'admin*'),
+                'icon' => '<path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/>'],
+            ['url' => url('/exercises/create'), 'label' => 'Create Exercise', 'active' => request()->is('exercises/create', 'exercises/edit*'),
+                'icon' => '<path d="M12 5v14M5 12h14"/>'],
+            ['url' => url('/exercises/saved'), 'label' => 'My Saved', 'active' => request()->is('exercises/saved', 'exercises/index', 'exercises/view*'),
+                'icon' => '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>'],
+            ['url' => url('/competitions'), 'label' => 'Competitions', 'active' => request()->is('competitions*'),
+                'icon' => '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>'],
+            ['url' => route('training.index'), 'label' => 'Training Rounds', 'active' => request()->is('training*'),
+                'icon' => '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>'],
+            ['url' => route('courses.index'), 'label' => 'Courses Map', 'active' => request()->is('courses*'),
+                'icon' => '<path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3zM9 3v15M15 6v15"/>'],
+        ];
+    @endphp
+
+    <nav class="ds-nav">
+        <div class="ds-nav__inner">
+            <a href="/dashboard" class="ds-brand">
+                <img src="{{ asset('images/logo.png') }}" alt="">
+                <span>
+                    <span class="ds-brand__name">Disc<span>Stats</span></span>
+                    <span class="ds-brand__tag">Throw · Track · Improve</span>
+                </span>
+            </a>
+
+            <div class="ds-links">
+                @foreach($navItems as $item)
+                    <a href="{{ $item['url'] }}" @class(['ds-link', 'is-active' => $item['active']])>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{!! $item['icon'] !!}</svg>
+                        {{ $item['label'] }}
+                    </a>
+                @endforeach
+            </div>
+
+            <div class="ds-user">
+                <a href="{{ route('profile.show', $user) }}" class="ds-user__chip" title="Your profile">
+                    <span class="ds-avatar">
+                        @if($user->avatar)
+                            <img src="{{ asset('storage/' . $user->avatar) }}" alt="">
+                        @else
+                            <span>{{ strtoupper(substr($user->name, 0, 1)) }}</span>
+                        @endif
+                    </span>
+                    <span>
+                        <span class="ds-user__name">{{ $user->name }}</span>
+                        <span @class(['ds-user__role', 'is-admin' => $user->isAdmin()])>{{ $roleLabel }}</span>
+                    </span>
+                </a>
+                <form action="{{ route('logout') }}" method="POST">
+                    @csrf
+                    <button type="submit" class="ds-logout" title="Log out" aria-label="Log out">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
                     </button>
-                    
-                    <div class="hidden sm:ml-4 sm:flex sm:items-center">
-                        <div class="flex items-center space-x-3">
-                            <a href="{{ route('profile.show', Auth::user()) }}" class="flex items-center gap-2 text-sm text-gray-700 hover:text-indigo-600">
-                                @if(Auth::user()->avatar)
-                                    <img src="{{ asset('storage/' . Auth::user()->avatar) }}" alt="" class="h-7 w-7 rounded-full object-cover">
-                                @else
-                                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">{{ strtoupper(substr(Auth::user()->name, 0, 1)) }}</span>
-                                @endif
-                                {{ Auth::user()->name }}
-                                @if(Auth::user()->isAdmin())
-                                    <span class="ml-1 px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
-                                        Admin
-                                    </span>
-                                @else
-                                    <span class="ml-1 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                                        User
-                                    </span>
-                                @endif
-                            </a>
-                            <form action="{{ route('logout') }}" method="POST">
-                                @csrf
-                                <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">
-                                    Logout
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
+                </form>
             </div>
+
+            <button type="button" class="ds-burger" id="mobile-menu-btn" aria-label="Open menu" aria-expanded="false">
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h16"/></svg>
+            </button>
         </div>
-        
-        <div class="sm:hidden fixed inset-0 bg-white shadow-lg z-50 overflow-y-auto" id="mobile-menu" style="display: none;">
-            <div class="px-2 pt-2 pb-3 space-y-1">
-                <a href="/dashboard" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    Dashboard
-                </a>
-                <a href="/exercises/create" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    Create Exercise
-                </a>
-                <a href="/exercises/saved" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    My Saved
-                </a>
-                <a href="/competitions" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    Competitions
-                </a>
-                <a href="{{ route('training.index') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    Training Rounds
-                </a>
-                <a href="{{ route('courses.index') }}" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                    Courses Map
-                </a>
-                <div class="border-t border-gray-200 pt-3 mt-2">
-                    <div class="px-3 py-2">
-                        <a href="{{ route('profile.show', Auth::user()) }}" class="text-sm font-medium text-gray-900">{{ Auth::user()->name }}</a>
-                        <p class="text-xs text-gray-500">
-                            @if(Auth::user()->isAdmin())
-                                Admin
-                            @else
-                                User
-                            @endif
-                        </p>
-                    </div>
-                    <form action="{{ route('logout') }}" method="POST">
-                        @csrf
-                        <button type="submit" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                            Logout
-                        </button>
-                    </form>
-                </div>
+
+        <div class="ds-mobile" id="mobile-menu" style="display: none;">
+            <a href="{{ route('profile.show', $user) }}" class="mb-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-white">
+                <span class="ds-avatar" style="width: 2.75rem; height: 2.75rem;">
+                    @if($user->avatar)
+                        <img src="{{ asset('storage/' . $user->avatar) }}" alt="">
+                    @else
+                        <span>{{ strtoupper(substr($user->name, 0, 1)) }}</span>
+                    @endif
+                </span>
+                <span>
+                    <span class="block font-bold">{{ $user->name }}</span>
+                    <span @class(['ds-user__role', 'is-admin' => $user->isAdmin()])>{{ $roleLabel }}</span>
+                </span>
+            </a>
+            <div class="space-y-1">
+                @foreach($navItems as $item)
+                    <a href="{{ $item['url'] }}" @class(['ds-link', 'is-active' => $item['active']])>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{!! $item['icon'] !!}</svg>
+                        {{ $item['label'] }}
+                    </a>
+                @endforeach
             </div>
+            <form action="{{ route('logout') }}" method="POST" class="mt-6 border-t border-white/10 pt-4">
+                @csrf
+                <button type="submit" class="ds-btn ds-btn--ghost w-full">Log out</button>
+            </form>
         </div>
     </nav>
 
-    <main class="w-full mx-auto py-3 sm:py-4 px-2 sm:px-4 overflow-x-hidden">
+    <main class="mx-auto w-full max-w-7xl overflow-x-hidden px-3 py-5 sm:px-6 sm:py-8">
         @if(session('success'))
-            <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-3 sm:px-4 py-3 rounded text-sm sm:text-base">
+            <div class="ds-flash ds-flash--ok" role="status">
+                <span class="ds-flash__icon">✓</span>
                 {{ session('success') }}
             </div>
         @endif
 
         @if(session('error'))
-            <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-3 sm:px-4 py-3 rounded text-sm sm:text-base">
+            <div class="ds-flash ds-flash--err" role="alert">
+                <span class="ds-flash__icon">!</span>
                 {{ session('error') }}
             </div>
         @endif
@@ -133,16 +123,20 @@
         @yield('content')
     </main>
 
+    <footer class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 pb-8 pt-2 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-gray-400 sm:px-6">
+        <span>DiscStats · {{ now()->year }}</span>
+        <span>Every throw counts</span>
+    </footer>
+
     <script>
         const mobileMenuBtn = document.getElementById('mobile-menu-btn');
         const mobileMenu = document.getElementById('mobile-menu');
-        
+
         mobileMenuBtn.addEventListener('click', () => {
-            if (mobileMenu.style.display === 'none') {
-                mobileMenu.style.display = 'block';
-            } else {
-                mobileMenu.style.display = 'none';
-            }
+            const open = mobileMenu.style.display === 'none';
+            mobileMenu.style.display = open ? 'block' : 'none';
+            mobileMenuBtn.setAttribute('aria-expanded', open);
+            document.body.style.overflow = open ? 'hidden' : '';
         });
     </script>
     @stack('scripts')
