@@ -62,19 +62,15 @@
                             </div>
                         </div>
 
-                        <button 
-                            type="button"
-                            class="save-btn ml-4 flex items-center px-4 py-2 rounded-lg transition transform hover:scale-105
-                            {{ $isSaved ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700 hover:bg-yellow-50' }}"
-                            data-exercise-id="{{ $exercise->id }}"
-                            data-saved="{{ $isSaved ? 'true' : 'false' }}">
-                            <svg class="save-icon w-5 h-5 mr-1 transition-transform" 
-                                fill="{{ $isSaved ? 'currentColor' : 'none' }}" 
-                                stroke="currentColor" 
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
-                            </svg>
-                            <span class="save-text">{{ $isSaved ? 'Saved' : 'Save' }}</span>
+                        <button type="button"
+                            class="ds-savebtn ml-4 shrink-0 {{ $isSaved ? 'is-saved' : '' }}"
+                            data-save-exercise="{{ $exercise->id }}"
+                            data-save-url="{{ route('exercises.toggleSave') }}"
+                            data-saved="{{ $isSaved ? 'true' : 'false' }}"
+                            aria-pressed="{{ $isSaved ? 'true' : 'false' }}"
+                            title="{{ $isSaved ? 'Remove from saved' : 'Save exercise' }}">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                            <span data-save-label>{{ $isSaved ? 'Saved' : 'Save' }}</span>
                         </button>
                     </div>
                 </div>
@@ -236,86 +232,4 @@
     </div>
 </div>
 
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const saveButtons = document.querySelectorAll('.save-btn');
-    
-    saveButtons.forEach(button => {
-        button.addEventListener('click', async function() {
-            const exerciseId = this.dataset.exerciseId;
-            const isCurrentlySaved = this.dataset.saved === 'true';
-            const saveIcon = this.querySelector('.save-icon');
-            const saveText = this.querySelector('.save-text');
-            const originalContent = this.innerHTML;
-    
-            this.disabled = true;
-            this.classList.add('opacity-50', 'cursor-not-allowed');
-            
-            try {
-                const response = await fetch('{{ route("exercises.toggleSave") }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify({
-                        exercise_id: exerciseId
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-          
-                    this.dataset.saved = data.isSaved ? 'true' : 'false';
-                    
-                    if (data.isSaved) {
-                        this.classList.remove('bg-gray-100', 'text-gray-700', 'hover:bg-yellow-50');
-                        this.classList.add('bg-yellow-100', 'text-yellow-700');
-                        saveIcon.setAttribute('fill', 'currentColor');
-                        saveText.textContent = 'Saved';
-                        
-                        saveIcon.classList.add('animate-bounce');
-                    } else {
-                        this.classList.remove('bg-yellow-100', 'text-yellow-700');
-                        this.classList.add('bg-gray-100', 'text-gray-700', 'hover:bg-yellow-50');
-                        saveIcon.setAttribute('fill', 'none');
-                        saveText.textContent = 'Save';
-                    }
-                    
-
-                    showToast(data.message);
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showToast('Something went wrong. Please try again.', 'error');
-            } finally {
-                this.disabled = false;
-                this.classList.remove('opacity-50', 'cursor-not-allowed');
-                setTimeout(() => {
-                    saveIcon.classList.remove('animate-bounce');
-                }, 1000);
-            }
-        });
-    });
-    
-
-    function showToast(message, type = 'success') {
-        const toast = document.createElement('div');
-        toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-y-0 z-50 ${
-            type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-        }`;
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateY(20px)';
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
-    }
-});
-</script>
-@endpush
 @endsection

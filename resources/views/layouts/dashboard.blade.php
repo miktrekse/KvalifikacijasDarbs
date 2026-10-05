@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') · DiscStats</title>
     <link rel="icon" href="{{ asset('images/logo.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,9 +28,9 @@
         ] : [
             ['url' => url('/dashboard'), 'label' => 'Dashboard', 'active' => request()->is('dashboard', 'admin*'),
                 'icon' => '<path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/>'],
-            ['url' => url('/exercises/create'), 'label' => 'Create Exercise', 'active' => request()->is('exercises/create', 'exercises/edit*'),
-                'icon' => '<path d="M12 5v14M5 12h14"/>'],
-            ['url' => url('/exercises/saved'), 'label' => 'My Saved', 'active' => request()->is('exercises/saved', 'exercises/index', 'exercises/view*'),
+            ['url' => route('exercises.index'), 'label' => 'Exercises', 'active' => request()->is('exercises/index', 'exercises/view*', 'exercises/create', 'exercises/edit*'),
+                'icon' => '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>'],
+            ['url' => url('/exercises/saved'), 'label' => 'My Saved', 'active' => request()->is('exercises/saved'),
                 'icon' => '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>'],
             ['url' => url('/competitions'), 'label' => 'Competitions', 'active' => request()->is('competitions*'),
                 'icon' => '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>'],

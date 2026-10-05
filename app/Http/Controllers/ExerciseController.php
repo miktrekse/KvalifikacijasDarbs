@@ -7,18 +7,90 @@ use App\Models\Exercise;
 use App\Models\Category;
 use App\Models\Comment;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class ExerciseController extends Controller
 {
-    public function index()
+    public const DIFFICULTIES = ['beginner', 'intermediate', 'advanced', 'expert'];
+
+    public const EQUIPMENT = [
+        'putters' => 'Putters',
+        'midranges' => 'Midranges',
+        'fairway-drivers' => 'Fairway drivers',
+        'distance-drivers' => 'Distance drivers',
+    ];
+
+    /** Session length buckets: [min, max] minutes, max null = open-ended. */
+    public const DURATIONS = [
+        'quick' => ['label' => 'Up to 15 min', 'range' => [0, 15]],
+        'medium' => ['label' => '16–25 min', 'range' => [16, 25]],
+        'long' => ['label' => '26+ min', 'range' => [26, null]],
+    ];
+
+    public function index(Request $request)
     {
-        $exercises = Exercise::where('is_public', true)
-            ->with('category')
-            ->with('user')
-            ->orderBy('created_at', 'desc')
-            ->paginate(12);
-        
-        return view('exercises.index', compact('exercises'));
+        $filters = $request->validate([
+            'q' => 'nullable|string|max:100',
+            'category' => 'nullable|integer|exists:categories,id',
+            'difficulty' => 'nullable|array',
+            'difficulty.*' => Rule::in(self::DIFFICULTIES),
+            'style' => ['nullable', Rule::in(['backhand', 'forehand'])],
+            'equipment' => ['nullable', Rule::in(array_keys(self::EQUIPMENT))],
+            'duration' => ['nullable', Rule::in(array_keys(self::DURATIONS))],
+            'saved' => 'nullable|boolean',
+            'sort' => ['nullable', Rule::in(['newest', 'easiest', 'hardest', 'shortest', 'popular'])],
+        ]);
+
+        $query = Exercise::where('is_public', true)
+            ->with(['category', 'user'])
+            ->withCount('users');
+
+        if ($search = trim($filters['q'] ?? '')) {
+            $query->where(fn ($q) => $q->where('title', 'like', "%{$search}%")
+                ->orWhere('description', 'like', "%{$search}%")
+                ->orWhere('tags', 'like', "%{$search}%"));
+        }
+        if (!empty($filters['category'])) {
+            $query->where('category_id', $filters['category']);
+        }
+        if (!empty($filters['difficulty'])) {
+            $query->whereIn('difficulty', $filters['difficulty']);
+        }
+        if (!empty($filters['style'])) {
+            $query->whereJsonContains('throwing_styles', $filters['style']);
+        }
+        if (!empty($filters['equipment'])) {
+            $query->where('equipment', 'like', '%' . $filters['equipment'] . '%');
+        }
+        if (!empty($filters['duration'])) {
+            [$min, $max] = self::DURATIONS[$filters['duration']]['range'];
+            $query->where('duration_minutes', '>=', $min);
+            if ($max !== null) {
+                $query->where('duration_minutes', '<=', $max);
+            }
+        }
+        if (!empty($filters['saved'])) {
+            $query->whereHas('users', fn ($q) => $q->where('user_id', Auth::id()));
+        }
+
+        $difficultyRank = "CASE difficulty WHEN 'beginner' THEN 1 WHEN 'intermediate' THEN 2 WHEN 'advanced' THEN 3 ELSE 4 END";
+        match ($filters['sort'] ?? 'newest') {
+            'easiest' => $query->orderByRaw("$difficultyRank asc"),
+            'hardest' => $query->orderByRaw("$difficultyRank desc"),
+            'shortest' => $query->orderByRaw('duration_minutes is null, duration_minutes asc'),
+            'popular' => $query->orderByDesc('users_count'),
+            default => $query->latest(),
+        };
+
+        $exercises = $query->orderBy('id', 'desc')->paginate(12)->withQueryString();
+
+        return view('exercises.index', [
+            'exercises' => $exercises,
+            'filters' => $filters,
+            'categories' => Category::withCount(['exercises' => fn ($q) => $q->where('is_public', true)])->orderBy('name')->get(),
+            'savedIds' => Auth::user()->addedExercises()->pluck('exercises.id')->all(),
+            'totalPublic' => Exercise::where('is_public', true)->count(),
+        ]);
     }
 
     public function create()
@@ -195,29 +267,33 @@ class ExerciseController extends Controller
     public function toggleSave(Request $request)
     {
         $request->validate([
-            'exercise_id' => 'required|exists:exercises,id'
+            'exercise_id' => 'required|exists:exercises,id',
+            'saved' => 'sometimes|boolean',
         ]);
 
         $exercise = Exercise::findOrFail($request->exercise_id);
         $user = Auth::user();
 
-        $isSaved = $user->addedExercises()
-            ->where('exercise_id', $exercise->id)
-            ->exists();
+        // Callers that send the wanted state get an idempotent request, so a double
+        // click or a retry can't flip it back; forms without it simply toggle.
+        $shouldSave = $request->has('saved')
+            ? $request->boolean('saved')
+            : !$user->addedExercises()->where('exercise_id', $exercise->id)->exists();
 
-        if ($isSaved) {
-            $user->addedExercises()->detach($exercise->id);
-            $message = 'Exercise removed from saved list.';
+        if ($shouldSave) {
+            $user->addedExercises()->syncWithoutDetaching([$exercise->id]);
+            $message = 'Saved to your drills.';
         } else {
-            $user->addedExercises()->attach($exercise->id);
-            $message = 'Exercise saved successfully!';
+            $user->addedExercises()->detach($exercise->id);
+            $message = 'Removed from your saved drills.';
         }
 
-        if ($request->ajax()) {
+        if ($request->expectsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => $message,
-                'isSaved' => !$isSaved
+                'isSaved' => $shouldSave,
+                'savesCount' => $exercise->users()->count(),
             ]);
         }
 
