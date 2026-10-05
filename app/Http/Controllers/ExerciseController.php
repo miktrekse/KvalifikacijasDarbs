@@ -13,6 +13,8 @@ class ExerciseController extends Controller
 {
     public const DIFFICULTIES = ['beginner', 'intermediate', 'advanced', 'expert'];
 
+    public const DIFFICULTY_COLORS = ['beginner' => '#22a268', 'intermediate' => '#0ea5e9', 'advanced' => '#f26b3a', 'expert' => '#b91c1c'];
+
     public const EQUIPMENT = [
         'putters' => 'Putters',
         'midranges' => 'Midranges',
@@ -27,9 +29,9 @@ class ExerciseController extends Controller
         'long' => ['label' => '26+ min', 'range' => [26, null]],
     ];
 
-    public function index(Request $request)
+    private function filterRules(array $sorts): array
     {
-        $filters = $request->validate([
+        return [
             'q' => 'nullable|string|max:100',
             'category' => 'nullable|integer|exists:categories,id',
             'difficulty' => 'nullable|array',
@@ -38,54 +40,67 @@ class ExerciseController extends Controller
             'equipment' => ['nullable', Rule::in(array_keys(self::EQUIPMENT))],
             'duration' => ['nullable', Rule::in(array_keys(self::DURATIONS))],
             'saved' => 'nullable|boolean',
-            'sort' => ['nullable', Rule::in(['newest', 'easiest', 'hardest', 'shortest', 'popular'])],
-        ]);
+            'sort' => ['nullable', Rule::in($sorts)],
+        ];
+    }
 
-        $query = Exercise::where('is_public', true)
-            ->with(['category', 'user'])
-            ->withCount('users');
+    /**
+     * Applies the library filters and sort to an exercise query. Columns are
+     * table-qualified because the saved list joins the exercise_user pivot.
+     */
+    private function applyFilters($query, array $filters, string $defaultSort): void
+    {
+        $query->with(['category', 'user'])->withCount('users');
 
         if ($search = trim($filters['q'] ?? '')) {
-            $query->where(fn ($q) => $q->where('title', 'like', "%{$search}%")
-                ->orWhere('description', 'like', "%{$search}%")
-                ->orWhere('tags', 'like', "%{$search}%"));
+            $query->where(fn ($q) => $q->where('exercises.title', 'like', "%{$search}%")
+                ->orWhere('exercises.description', 'like', "%{$search}%")
+                ->orWhere('exercises.tags', 'like', "%{$search}%"));
         }
         if (!empty($filters['category'])) {
-            $query->where('category_id', $filters['category']);
+            $query->where('exercises.category_id', $filters['category']);
         }
         if (!empty($filters['difficulty'])) {
-            $query->whereIn('difficulty', $filters['difficulty']);
+            $query->whereIn('exercises.difficulty', $filters['difficulty']);
         }
         if (!empty($filters['style'])) {
-            $query->whereJsonContains('throwing_styles', $filters['style']);
+            $query->whereJsonContains('exercises.throwing_styles', $filters['style']);
         }
         if (!empty($filters['equipment'])) {
-            $query->where('equipment', 'like', '%' . $filters['equipment'] . '%');
+            $query->where('exercises.equipment', 'like', '%' . $filters['equipment'] . '%');
         }
         if (!empty($filters['duration'])) {
             [$min, $max] = self::DURATIONS[$filters['duration']]['range'];
-            $query->where('duration_minutes', '>=', $min);
+            $query->where('exercises.duration_minutes', '>=', $min);
             if ($max !== null) {
-                $query->where('duration_minutes', '<=', $max);
+                $query->where('exercises.duration_minutes', '<=', $max);
             }
         }
         if (!empty($filters['saved'])) {
             $query->whereHas('users', fn ($q) => $q->where('user_id', Auth::id()));
         }
 
-        $difficultyRank = "CASE difficulty WHEN 'beginner' THEN 1 WHEN 'intermediate' THEN 2 WHEN 'advanced' THEN 3 ELSE 4 END";
-        match ($filters['sort'] ?? 'newest') {
+        $difficultyRank = "CASE exercises.difficulty WHEN 'beginner' THEN 1 WHEN 'intermediate' THEN 2 WHEN 'advanced' THEN 3 ELSE 4 END";
+        match ($filters['sort'] ?? $defaultSort) {
             'easiest' => $query->orderByRaw("$difficultyRank asc"),
             'hardest' => $query->orderByRaw("$difficultyRank desc"),
-            'shortest' => $query->orderByRaw('duration_minutes is null, duration_minutes asc'),
+            'shortest' => $query->orderByRaw('exercises.duration_minutes is null, exercises.duration_minutes asc'),
             'popular' => $query->orderByDesc('users_count'),
-            default => $query->latest(),
+            'recent' => $query->orderByDesc('exercise_user.created_at'),
+            default => $query->orderByDesc('exercises.created_at'),
         };
+        $query->orderByDesc('exercises.id');
+    }
 
-        $exercises = $query->orderBy('id', 'desc')->paginate(12)->withQueryString();
+    public function index(Request $request)
+    {
+        $filters = $request->validate($this->filterRules(['newest', 'easiest', 'hardest', 'shortest', 'popular']));
+
+        $query = Exercise::where('exercises.is_public', true);
+        $this->applyFilters($query, $filters, 'newest');
 
         return view('exercises.index', [
-            'exercises' => $exercises,
+            'exercises' => $query->paginate(12)->withQueryString(),
             'filters' => $filters,
             'categories' => Category::withCount(['exercises' => fn ($q) => $q->where('is_public', true)])->orderBy('name')->get(),
             'savedIds' => Auth::user()->addedExercises()->pluck('exercises.id')->all(),
@@ -254,14 +269,29 @@ class ExerciseController extends Controller
             ->with('success', 'Exercise deleted successfully!');
     }
 
-    public function saved()
+    public function saved(Request $request)
     {
-        $exercises = Auth::user()->addedExercises()
-            ->with(['category', 'user'])
-            ->orderBy('exercise_user.created_at', 'desc')
-            ->paginate(12);
-        
-        return view('exercises.saved', compact('exercises'));
+        $filters = $request->validate($this->filterRules(['recent', 'newest', 'easiest', 'hardest', 'shortest', 'popular']));
+        $user = Auth::user();
+
+        $query = $user->addedExercises();
+        $this->applyFilters($query, $filters, 'recent');
+
+        // Header numbers describe the whole saved list, not just the filtered page
+        $all = $user->addedExercises()->get(['exercises.id', 'exercises.user_id', 'exercises.category_id', 'exercises.duration_minutes']);
+
+        return view('exercises.saved', [
+            'exercises' => $query->paginate(12)->withQueryString(),
+            'filters' => $filters,
+            'categories' => Category::withCount(['exercises' => fn ($q) => $q->whereIn('exercises.id', $all->pluck('id'))])->orderBy('name')->get(),
+            'savedIds' => $all->pluck('id')->all(),
+            'summary' => [
+                'saved' => $all->count(),
+                'minutes' => (int) $all->sum('duration_minutes'),
+                'categories' => $all->pluck('category_id')->filter()->unique()->count(),
+                'own' => $all->where('user_id', $user->id)->count(),
+            ],
+        ]);
     }
 
     public function toggleSave(Request $request)

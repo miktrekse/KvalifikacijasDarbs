@@ -3,90 +3,85 @@
 @section('title', 'My Saved Exercises')
 
 @section('content')
-<div class="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
-    <div class="flex items-center justify-between mb-6">
-        <div>
-            <h1 class="text-3xl font-bold text-gray-800">My Saved Exercises</h1>
-            <p class="text-gray-600 mt-1">Exercises you've saved from the public library</p>
-        </div>
-        <a href="{{ route('exercises.index') }}" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-            </svg>
-            Browse More
-        </a>
-    </div>
+@php
+    $isFiltering = collect($filters)->except('sort')->filter()->isNotEmpty();
+    $hours = intdiv($summary['minutes'], 60);
+    $practiceTime = $summary['minutes'] ? ($hours ? $hours . 'h ' : '') . ($summary['minutes'] % 60) . 'm' : '—';
+@endphp
 
-    @if($exercises->count() > 0)
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            @foreach($exercises as $exercise)
-                <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition p-6 border border-gray-100">
-                    <div class="flex items-start justify-between mb-3">
-                        <h2 class="text-xl font-semibold text-gray-800">{{ $exercise->title }}</h2>
-                        @if($exercise->category)
-                            <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">{{ $exercise->category->name }}</span>
-                        @endif
-                    </div>
-                    
-                    <p class="text-gray-600 mb-4 line-clamp-3">{{ Str::limit($exercise->description, 120) }}</p>
-                    
-                    <div class="flex items-center justify-between text-sm text-gray-500 mb-4">
-                        <span class="flex items-center">
-                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            {{ $exercise->duration_minutes ?? 'N/A' }} min
-                        </span>
-                        <span class="flex items-center">
-                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                            </svg>
-                            {{ ucfirst($exercise->difficulty ?? 'Any') }}
-                        </span>
-                    </div>
-                    
-                    <div class="flex items-center justify-between">
-                        <a href="{{ route('exercises.view', $exercise->id) }}" class="flex-1 text-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition mr-2">
-                            View Details
-                        </a>
-                        <form action="{{ route('exercises.toggleSave') }}" method="POST">
-                            @csrf
-                            <input type="hidden" name="exercise_id" value="{{ $exercise->id }}">
-                            <input type="hidden" name="saved" value="0">
-                            <button type="submit" class="p-2 text-yellow-500 hover:bg-yellow-50 rounded-lg transition" title="Remove from saved">
-                                <svg class="w-5 h-5 fill-current" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
-                                </svg>
-                            </button>
-                        </form>
-                    </div>
-
-                    <div class="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
-                        Saved {{ $exercise->pivot->created_at->diffForHumans() }}
-                    </div>
-                </div>
-            @endforeach
-        </div>
-        
-        <div class="mt-8">
-            {{ $exercises->links() }}
-        </div>
-    @else
-        <div class="text-center py-16 bg-white rounded-lg shadow-md">
-            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
-            </svg>
-            <h3 class="mt-4 text-lg font-medium text-gray-900">No saved exercises yet</h3>
-            <p class="mt-2 text-gray-500">Browse the public exercises and save the ones you want to practice!</p>
-            <div class="mt-6">
-                <a href="{{ route('exercises.index') }}" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                    </svg>
-                    Browse Exercises
+<div class="space-y-6">
+    <section class="ds-hero">
+        <div class="grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-end">
+            <div>
+                <p class="ds-eyebrow">Your practice plan</p>
+                <h1 class="mt-4">My saved<br><em>drills.</em></h1>
+                <p class="mt-4 max-w-md text-sm sm:text-base">Everything you've bookmarked to practise — filter it down to what fits today's session.</p>
+                <a href="{{ route('exercises.index') }}" class="ds-btn ds-btn--flight mt-6">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                    Browse the library
                 </a>
             </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="ds-stat" style="--accent: #f26b3a">
+                    <p class="ds-stat__label">Saved drills</p>
+                    <p class="ds-stat__value">{{ $summary['saved'] }}</p>
+                    <span class="ds-stat__ring"></span>
+                </div>
+                <div class="ds-stat" style="--accent: #3fbd82">
+                    <p class="ds-stat__label">Practice time</p>
+                    <p class="ds-stat__value">{{ $practiceTime }}</p>
+                    <span class="ds-stat__ring"></span>
+                </div>
+                <div class="ds-stat" style="--accent: #c6f36b">
+                    <p class="ds-stat__label">Categories</p>
+                    <p class="ds-stat__value">{{ $summary['categories'] }}<span class="text-lg text-white/40">/{{ $categories->count() }}</span></p>
+                    <span class="ds-stat__ring"></span>
+                </div>
+                <div class="ds-stat" style="--accent: #7cc9ff">
+                    <p class="ds-stat__label">Your own</p>
+                    <p class="ds-stat__value">{{ $summary['own'] }}</p>
+                    <span class="ds-stat__ring"></span>
+                </div>
+            </div>
         </div>
+    </section>
+
+    @if($summary['saved'] === 0)
+        <div class="ds-card px-6 py-14 text-center">
+            <span class="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-flight-soft text-flight">
+                <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <p class="mt-4 font-display text-2xl font-extrabold text-ink">No saved drills yet</p>
+            <p class="mt-2 text-sm text-gray-500">Tap the bookmark on any drill in the library and it will show up here.</p>
+            <a href="{{ route('exercises.index') }}" class="ds-btn ds-btn--flight mt-6">Find drills to save</a>
+        </div>
+    @else
+        @include('exercises.partials.filters', [
+            'action' => route('exercises.saved'),
+            'noun' => 'saved drill',
+            'showSavedToggle' => false,
+            'sorts' => ['recent' => 'Recently saved', 'newest' => 'Newest drill', 'popular' => 'Most saved', 'easiest' => 'Easiest first', 'hardest' => 'Hardest first', 'shortest' => 'Shortest first'],
+        ])
+
+        @if($exercises->count() > 0)
+            {{-- Un-saving here dims the card instead of removing it, so a mis-tap is one click to undo --}}
+            <div class="ds-saved-grid grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                @foreach($exercises as $exercise)
+                    @include('exercises.partials.card', ['isSaved' => true])
+                @endforeach
+            </div>
+
+            <div>{{ $exercises->links() }}</div>
+        @else
+            <div class="ds-card px-6 py-14 text-center">
+                <p class="font-display text-2xl font-extrabold text-ink">No saved drills match those filters</p>
+                <p class="mt-2 text-sm text-gray-500">Try removing a filter, or find more drills in the library.</p>
+                <div class="mt-6 flex flex-wrap justify-center gap-3">
+                    <a href="{{ route('exercises.saved') }}" class="ds-btn ds-btn--line">Clear all filters</a>
+                    <a href="{{ route('exercises.index', request()->except(['page', 'sort'])) }}" class="ds-btn ds-btn--flight">Search the library</a>
+                </div>
+            </div>
+        @endif
     @endif
 </div>
 @endsection
