@@ -96,6 +96,12 @@ class User extends Authenticatable
         return $this->role === 'guest';
     }
 
+    /** Real accounts only: the shared guest login isn't a user and stays out of lists, counts and searches. */
+    public function scopeWithoutGuests($query)
+    {
+        return $query->where('role', '!=', 'guest');
+    }
+
     public const VERIFY_AFTER_COMPETITIONS = 3;
 
     public function isVerified(): bool

@@ -31,18 +31,18 @@ class DashboardController extends Controller
     public function adminDashboard()
     {
         return view('dashboard.admin', [
-            'totalUsers' => User::count(),
+            'totalUsers' => User::withoutGuests()->count(),
             'totalExercises' => Exercise::count(),
             'publicExercises' => Exercise::where('is_public', true)->count(),
             'totalComments' => Comment::count(),
             'recentExercises' => Exercise::with('user')->latest()->take(10)->get(),
-            'recentUsers' => User::latest()->take(5)->get(),
+            'recentUsers' => User::withoutGuests()->latest()->take(5)->get(),
         ]);
     }
 
     public function manageUsers()
     {
-        $users = User::orderBy('created_at', 'desc')->paginate(20);
+        $users = User::withoutGuests()->orderBy('created_at', 'desc')->paginate(20);
         return view('admin.users.index', compact('users'));
     }
 

@@ -175,7 +175,8 @@ class TrainingRoundController extends Controller
             return response()->json(['players' => []]);
         }
 
-        $players = User::where('id', '!=', Auth::id())
+        $players = User::withoutGuests()
+            ->where('id', '!=', Auth::id())
             ->where('name', 'like', '%' . $query . '%')
             ->orderBy('name')
             ->limit(8)
