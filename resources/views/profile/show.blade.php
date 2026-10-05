@@ -21,7 +21,7 @@
                 </div>
             </div>
             @auth
-                @if(Auth::id() === $user->id)
+                @if(Auth::id() === $user->id && !$user->isGuest())
                     <a href="#profile-settings" class="ds-btn ds-btn--flight self-start sm:self-auto">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
                         Edit profile
@@ -52,7 +52,7 @@
     </section>
 
     @auth
-        @if(Auth::id() === $user->id)
+        @if(Auth::id() === $user->id && !$user->isGuest())
             <section id="profile-settings" class="rounded-xl bg-white p-5 shadow-md sm:p-7">
                 <h2 class="text-xl font-bold text-gray-900">Profile settings</h2><p class="mt-1 text-sm text-gray-500">Update your public player details and profile picture.</p>
                 <form method="POST" action="{{ route('profile.update') }}" enctype="multipart/form-data" class="mt-5 grid gap-4 sm:grid-cols-2">

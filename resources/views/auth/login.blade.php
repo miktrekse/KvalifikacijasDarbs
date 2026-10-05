@@ -44,6 +44,19 @@
         </button>
     </form>
 
+    <div class="my-6 flex items-center gap-3 font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-gray-400">
+        <span class="h-px flex-1 bg-gray-200"></span>or<span class="h-px flex-1 bg-gray-200"></span>
+    </div>
+
+    <form action="{{ route('guest.login') }}" method="POST">
+        @csrf
+        <button type="submit" class="ds-btn ds-btn--line w-full !rounded-[0.95rem] !py-3.5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            Continue as guest
+        </button>
+        <p class="mt-2 text-center text-xs text-gray-400">Look around competitions, drills and courses — no account needed.</p>
+    </form>
+
     <p class="mt-8 text-center text-sm text-gray-500">
         New to DiscStats?
         <a href="{{ route('register') }}" class="font-bold text-flight hover:underline">Create an account</a>

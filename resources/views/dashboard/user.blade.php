@@ -16,11 +16,20 @@
                 <h1 class="mt-4">Hey {{ strtok($user->name, ' ') }},<br><em>let's go throw.</em></h1>
                 <p class="mt-4 max-w-md text-sm sm:text-base">Manage your disc golf training exercises, log rounds shot by shot and track your progress.</p>
                 <div class="mt-6 flex flex-wrap gap-3">
-                    <a href="{{ route('training.create') }}" class="ds-btn ds-btn--flight">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-                        Start a round
-                    </a>
-                    <a href="/exercises/create" class="ds-btn ds-btn--ghost">Create exercise</a>
+                    @if($user->isGuest())
+                        <form action="{{ route('logout') }}" method="POST">
+                            @csrf
+                            <input type="hidden" name="then" value="register">
+                            <button type="submit" class="ds-btn ds-btn--flight">Create a free account</button>
+                        </form>
+                        <a href="{{ route('competitions.index') }}" class="ds-btn ds-btn--ghost">Browse competitions</a>
+                    @else
+                        <a href="{{ route('training.create') }}" class="ds-btn ds-btn--flight">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                            Start a round
+                        </a>
+                        <a href="/exercises/create" class="ds-btn ds-btn--ghost">Create exercise</a>
+                    @endif
                 </div>
             </div>
             <div class="grid grid-cols-2 gap-3">

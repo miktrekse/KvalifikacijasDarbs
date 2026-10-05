@@ -247,7 +247,15 @@
                 @endif
 
                 @auth
-                    @if($competition->hasGroups())
+                    @if(Auth::user()->isGuest())
+                        <form action="{{ route('logout') }}" method="POST">
+                            @csrf
+                            <input type="hidden" name="then" value="register">
+                            <button type="submit" class="block w-full mb-3 text-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                                Sign up to register
+                            </button>
+                        </form>
+                    @elseif($competition->hasGroups())
                         <p class="mb-3 text-sm text-gray-500 text-center">Registration closed — groups have been drawn.</p>
                     @elseif($competition->status === 'upcoming' && $registrationDivisions->isNotEmpty() && (!$competition->max_participants || $competition->registrations->count() < $competition->max_participants))
                         <button type="button" id="open-registration-modal"

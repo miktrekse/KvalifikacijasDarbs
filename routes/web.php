@@ -19,9 +19,10 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/guest', [AuthController::class, 'guest'])->name('guest.login');
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'readonly.guest'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/profile', fn (\Illuminate\Http\Request $request) => redirect()->route('profile.show', $request->user()))->name('profile.edit');
@@ -73,7 +74,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/training/{round}/holes/{hole}/shots/undo', [TrainingRoundController::class, 'undoShot'])->name('training.shots.undo');
 });
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/admin', [DashboardController::class, 'adminDashboard'])->name('admin.dashboard');
     
     Route::get('/admin/users', [DashboardController::class, 'manageUsers'])->name('admin.users');

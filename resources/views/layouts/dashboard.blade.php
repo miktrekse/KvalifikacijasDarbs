@@ -13,8 +13,18 @@
 <body class="min-h-screen overflow-x-hidden">
     @php
         $user = Auth::user();
-        $roleLabel = $user->isAdmin() ? 'Admin' : ($user->isVerified() ? 'Verified' : 'Player');
-        $navItems = [
+        $isGuest = $user->isGuest();
+        $roleLabel = $user->isAdmin() ? 'Admin' : ($user->isVerified() ? 'Verified' : ($isGuest ? 'Guest' : 'Player'));
+        $navItems = $isGuest ? [
+            ['url' => url('/dashboard'), 'label' => 'Dashboard', 'active' => request()->is('dashboard'),
+                'icon' => '<path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/>'],
+            ['url' => route('exercises.index'), 'label' => 'Exercises', 'active' => request()->is('exercises*'),
+                'icon' => '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>'],
+            ['url' => url('/competitions'), 'label' => 'Competitions', 'active' => request()->is('competitions*'),
+                'icon' => '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>'],
+            ['url' => route('courses.index'), 'label' => 'Courses Map', 'active' => request()->is('courses*'),
+                'icon' => '<path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3zM9 3v15M15 6v15"/>'],
+        ] : [
             ['url' => url('/dashboard'), 'label' => 'Dashboard', 'active' => request()->is('dashboard', 'admin*'),
                 'icon' => '<path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/>'],
             ['url' => url('/exercises/create'), 'label' => 'Create Exercise', 'active' => request()->is('exercises/create', 'exercises/edit*'),
@@ -50,7 +60,7 @@
             </div>
 
             <div class="ds-user">
-                <a href="{{ route('profile.show', $user) }}" class="ds-user__chip" title="Your profile">
+                <a href="{{ $isGuest ? url('/dashboard') : route('profile.show', $user) }}" class="ds-user__chip" title="Your profile">
                     <span class="ds-avatar">
                         @if($user->avatar)
                             <img src="{{ asset('storage/' . $user->avatar) }}" alt="">
@@ -65,7 +75,7 @@
                 </a>
                 <form action="{{ route('logout') }}" method="POST">
                     @csrf
-                    <button type="submit" class="ds-logout" title="Log out" aria-label="Log out">
+                    <button type="submit" class="ds-logout" title="{{ $isGuest ? 'Exit guest mode' : 'Log out' }}" aria-label="{{ $isGuest ? 'Exit guest mode' : 'Log out' }}">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
                     </button>
                 </form>
@@ -77,7 +87,7 @@
         </div>
 
         <div class="ds-mobile" id="mobile-menu" style="display: none;">
-            <a href="{{ route('profile.show', $user) }}" class="mb-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-white">
+            <a href="{{ $isGuest ? url('/dashboard') : route('profile.show', $user) }}" class="mb-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-white">
                 <span class="ds-avatar" style="width: 2.75rem; height: 2.75rem;">
                     @if($user->avatar)
                         <img src="{{ asset('storage/' . $user->avatar) }}" alt="">
@@ -100,12 +110,35 @@
             </div>
             <form action="{{ route('logout') }}" method="POST" class="mt-6 border-t border-white/10 pt-4">
                 @csrf
-                <button type="submit" class="ds-btn ds-btn--ghost w-full">Log out</button>
+                <button type="submit" class="ds-btn ds-btn--ghost w-full">{{ $isGuest ? 'Exit guest mode' : 'Log out' }}</button>
             </form>
         </div>
     </nav>
 
     <main class="mx-auto w-full max-w-7xl overflow-x-hidden px-3 py-5 sm:px-6 sm:py-8">
+        @if($isGuest)
+            <div class="ds-guest-bar">
+                <span class="ds-guest-bar__icon">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </span>
+                <p class="min-w-0 flex-1 text-sm">
+                    <strong class="font-bold text-ink">You're browsing as a guest.</strong>
+                    <span class="text-gray-600">Sign up to log rounds, save drills and register for competitions.</span>
+                </p>
+                <div class="flex shrink-0 gap-2">
+                    <form action="{{ route('logout') }}" method="POST">
+                        @csrf
+                        <button type="submit" class="ds-btn ds-btn--line !py-2">Sign in</button>
+                    </form>
+                    <form action="{{ route('logout') }}" method="POST">
+                        @csrf
+                        <input type="hidden" name="then" value="register">
+                        <button type="submit" class="ds-btn ds-btn--flight !py-2">Sign up free</button>
+                    </form>
+                </div>
+            </div>
+        @endif
+
         @if(session('success'))
             <div class="ds-flash ds-flash--ok" role="status">
                 <span class="ds-flash__icon">✓</span>

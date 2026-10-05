@@ -88,6 +88,14 @@ class User extends Authenticatable
         return $this->role === 'user';
     }
 
+    /** Shared read-only account used by "Continue as guest". */
+    public const GUEST_EMAIL = 'guest@discstats.local';
+
+    public function isGuest(): bool
+    {
+        return $this->role === 'guest';
+    }
+
     public const VERIFY_AFTER_COMPETITIONS = 3;
 
     public function isVerified(): bool

@@ -410,6 +410,10 @@
     .ds-board-row { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr) auto auto; align-items: center; gap: 0.75rem; padding: 0.6rem 0.25rem; border-top: 1px dashed var(--color-line); }
     .ds-board-row:first-child { border-top: 0; }
 
+    /* ---------- Guest mode ---------- */
+    .ds-guest-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.85rem; margin-bottom: 1.25rem; padding: 0.85rem 1rem; border-radius: 1.1rem; background: linear-gradient(90deg, #fff3ea, var(--color-chalk)); border: 1px solid #f9c8b4; }
+    .ds-guest-bar__icon { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; flex-shrink: 0; border-radius: 0.8rem; color: white; background: var(--color-flight); }
+
     /* ---------- Training round list ---------- */
     .ds-round { display: block; padding: 1.25rem; border-radius: 1.4rem; background: var(--color-chalk); border: 1px solid var(--color-line); box-shadow: var(--shadow-sm); transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; }
     .ds-round:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: var(--color-indigo-300); }
