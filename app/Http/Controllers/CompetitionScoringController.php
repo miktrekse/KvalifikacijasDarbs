@@ -7,6 +7,7 @@ use App\Models\CompetitionGroup;
 use App\Models\CompetitionHole;
 use App\Models\CompetitionShot;
 use App\Models\TrainingRoundShot;
+use App\Support\CardScores;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -36,8 +37,9 @@ class CompetitionScoringController extends Controller
         $playerIds = $group->registrations->pluck('user_id');
 
         $holes = $competition->courseHoles()
-            ->with(['shots' => fn ($query) => $query->whereIn('user_id', $playerIds)])
+            ->with(['shots' => fn ($query) => $query->whereIn('user_id', $playerIds)->with('recorder:id,name')])
             ->get();
+        $me = Auth::id();
 
         return [
             'players' => $group->registrations->map(fn ($registration) => [
@@ -52,7 +54,18 @@ class CompetitionScoringController extends Controller
                 'number' => $hole->number,
                 'par' => $hole->par,
                 'distanceM' => $hole->distance_m,
-                'shots' => $hole->shots->groupBy('user_id')->map(fn ($shots) => $shots->map(fn (CompetitionShot $shot) => $this->shotPayload($shot))->values()),
+                // This phone's own copy of each player's hole; other scorers' copies are only
+                // summarised, so a hole isn't filled in here just because someone else scored it
+                'shots' => $hole->shots->where('recorded_by', $me)->groupBy('user_id')
+                    ->map(fn ($shots) => $shots->map(fn (CompetitionShot $shot) => $this->shotPayload($shot))->values()),
+                'entries' => $hole->shots->where('recorded_by', '!=', $me)->groupBy('user_id')
+                    ->map(fn ($shots) => CardScores::entries($shots)->map(fn (array $entry) => [
+                        'scorerId' => $entry['scorer'],
+                        'scorerName' => $entry['shots']->first()->recorder?->name ?? 'Another scorer',
+                        'finished' => $entry['finished'],
+                        'strokes' => $entry['strokes'],
+                        'scoreOnly' => $entry['score_only'],
+                    ])->values()),
             ])->values(),
         ];
     }
@@ -129,8 +142,8 @@ class CompetitionScoringController extends Controller
 
         // Two scorers on the same card may tap at once; lock the player's hole while numbering the shot.
         $shot = DB::transaction(function () use ($hole, $userId, $request) {
-            $shots = $hole->shots()->where('user_id', $userId)->lockForUpdate()->get();
-            abort_if($shots->last()?->result === 'in_basket', 422, 'This hole is already finished for that player.');
+            $shots = $this->myCopy($hole, $userId)->lockForUpdate()->get();
+            abort_if($shots->last()?->result === 'in_basket', 422, 'You already finished this hole for that player.');
 
             return $hole->shots()->create([
                 'user_id' => $userId,
@@ -165,10 +178,10 @@ class CompetitionScoringController extends Controller
         ])['strokes'] ?? null;
 
         $shot = DB::transaction(function () use ($hole, $userId, $strokes) {
-            $shots = $hole->shots()->where('user_id', $userId)->lockForUpdate()->get();
-            abort_if($shots->contains(fn (CompetitionShot $shot) => !$shot->score_only), 422, 'This hole is being tracked shot by shot for that player.');
+            $shots = $this->myCopy($hole, $userId)->lockForUpdate()->get();
+            abort_if($shots->contains(fn (CompetitionShot $shot) => !$shot->score_only), 422, 'You are tracking this hole shot by shot for that player.');
 
-            $hole->shots()->where('user_id', $userId)->delete();
+            $this->myCopy($hole, $userId)->delete();
 
             return $strokes ? $hole->shots()->create([
                 'user_id' => $userId,
@@ -188,6 +201,43 @@ class CompetitionScoringController extends Controller
         ]);
     }
 
+    /**
+     * Settles a score conflict by taking another scorer's copy of the hole as your own
+     * (their throws too, when they tracked shot by shot).
+     */
+    public function acceptScore(Request $request, $id, CompetitionHole $hole)
+    {
+        $competition = Competition::findOrFail($id);
+        $userId = $this->authorizeShot($request, $competition, $hole);
+        $scorerId = $request->validate(['scorer_id' => ['required', 'integer']])['scorer_id'];
+
+        $shots = DB::transaction(function () use ($hole, $userId, $scorerId) {
+            $theirs = $hole->shots()->where('user_id', $userId)->where('recorded_by', $scorerId)->orderBy('shot_number')->get();
+            abort_unless($theirs->last()?->result === 'in_basket', 422, 'That scorer has not finished this hole.');
+
+            $this->myCopy($hole, $userId)->lockForUpdate()->get();
+            $this->myCopy($hole, $userId)->delete();
+
+            return $theirs->map(fn (CompetitionShot $shot) => $hole->shots()->create([
+                'user_id' => $userId,
+                'recorded_by' => Auth::id(),
+            ] + $shot->only(['shot_number', 'result', 'ob_lie', 'strokes', 'distance_m', 'score_only'])));
+        });
+
+        $finished = $competition->refresh()->finishIfComplete();
+
+        return response()->json([
+            'finished' => $finished,
+            'shots' => $shots->map(fn (CompetitionShot $shot) => $this->shotPayload($shot))->values(),
+        ]);
+    }
+
+    /** The current scorer's own copy of a player's hole. */
+    private function myCopy(CompetitionHole $hole, int $userId)
+    {
+        return $hole->shots()->where('user_id', $userId)->where('recorded_by', Auth::id());
+    }
+
     private function shotPayload(CompetitionShot $shot): array
     {
         return [
@@ -205,7 +255,7 @@ class CompetitionScoringController extends Controller
         $competition = Competition::findOrFail($id);
         $userId = $this->authorizeShot($request, $competition, $hole);
 
-        $hole->shots()->where('user_id', $userId)->reorder('shot_number', 'desc')->first()?->delete();
+        $this->myCopy($hole, $userId)->reorder('shot_number', 'desc')->first()?->delete();
 
         return response()->json(['ok' => true]);
     }

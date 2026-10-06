@@ -71,21 +71,18 @@ class Competition extends Model
         return $this->hasMany(CompetitionRegistration::class);
     }
 
-    /** True once every player on a card has holed out on every hole. */
+    /** True once every player on a card has a settled score (finished, no conflict) on every hole. */
     public function allRoundsFinished(): bool
     {
-        $players = $this->registrations()->whereNotNull('competition_group_id')->count();
-        $holes = $this->courseHoles()->count();
-        if ($players === 0 || $holes === 0) {
+        $players = $this->registrations()->whereNotNull('competition_group_id')->pluck('user_id');
+        $holes = $this->courseHoles()->with('shots')->get();
+        if ($players->isEmpty() || $holes->isEmpty()) {
             return false;
         }
 
-        $holedOut = CompetitionShot::whereIn('competition_hole_id', $this->courseHoles()->select('id'))
-            ->where('result', 'in_basket')
-            ->whereIn('user_id', $this->registrations()->whereNotNull('competition_group_id')->select('user_id'))
-            ->count();
-
-        return $holedOut >= $players * $holes;
+        return $holes->every(fn (CompetitionHole $hole) => $players->diff(
+            $hole->useOfficialShots()->shots->where('result', 'in_basket')->pluck('user_id')
+        )->isEmpty());
     }
 
     /**
@@ -183,7 +180,7 @@ class Competition extends Model
      */
     public function leaderboard(): Collection
     {
-        $holes = $this->courseHoles()->with('shots')->get();
+        $holes = $this->courseHoles()->with('shots')->get()->each->useOfficialShots();
         $registrations = $this->registrations()->with(['user', 'group'])->get();
         $roundRatings = $this->roundRatings()->get()->keyBy('user_id');
 

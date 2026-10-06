@@ -52,6 +52,7 @@ class ProfileController extends Controller
             ->with(['shots' => fn ($query) => $query->where('user_id', $user->id)])
             ->orderBy('number')
             ->get()
+            ->each->useOfficialShots()
             ->groupBy('competition_id');
         $statRounds = $log->map(fn ($round) => [
             'stats' => RoundStats::forRound($holesByCompetition->get($round->competition_id, collect()), $user->id),

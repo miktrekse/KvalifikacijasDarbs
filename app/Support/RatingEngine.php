@@ -97,7 +97,7 @@ class RatingEngine
     /** Rates one finished tournament. Returns the number of rated rounds (0 if nothing to rate). */
     private function rateCompetition(Competition $competition, array &$history, array &$ratings): int
     {
-        $holes = $competition->courseHoles;
+        $holes = $competition->courseHoles->each->useOfficialShots();
         if ($holes->isEmpty()) {
             return 0;
         }

@@ -59,6 +59,7 @@ Route::middleware(['auth', 'readonly.guest'])->group(function () {
     Route::post('/competitions/{id}/holes/{hole}/shots', [CompetitionScoringController::class, 'addShot'])->name('competitions.shots.store');
     Route::post('/competitions/{id}/holes/{hole}/shots/undo', [CompetitionScoringController::class, 'undoShot'])->name('competitions.shots.undo');
     Route::post('/competitions/{id}/holes/{hole}/score', [CompetitionScoringController::class, 'setScore'])->name('competitions.shots.score');
+    Route::post('/competitions/{id}/holes/{hole}/accept', [CompetitionScoringController::class, 'acceptScore'])->name('competitions.shots.accept');
 
     Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
     Route::get('/courses/data', [CourseController::class, 'data'])->name('courses.data');

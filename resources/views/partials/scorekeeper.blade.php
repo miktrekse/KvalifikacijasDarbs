@@ -7,6 +7,11 @@
     Expects $scoring with players, holes, startingHole, scoringOpen, closed,
     startsAt, closedMessage, storageKey, shotUrl / undoUrl / scoreUrl (with __HOLE__
     placeholder) and an optional dataUrl that is polled for other scorers' throws.
+
+    With an acceptUrl (competitions) every scorer keeps their own copy of each hole:
+    hole.shots holds this phone's copy and hole.entries the other scorers' summaries.
+    A hole counts once the finished copies agree; different numbers are a conflict
+    that is flagged until someone changes theirs (PDGA Live style).
 --}}
     {{-- Step 1: choose who you are keeping score for --}}
     <section id="picker" class="ds-card hidden">
@@ -42,6 +47,9 @@
         </div>
 
         <div id="closed-note" class="ds-flash ds-flash--err hidden"><span class="ds-flash__icon">!</span><span></span></div>
+
+        {{-- Holes where the scorers' numbers disagree --}}
+        <div id="conflict-bar" class="ds-flash ds-flash--err hidden flex-wrap" role="alert"></div>
 
         {{-- Score tab --}}
         <div data-panel="score" class="space-y-4">
@@ -93,6 +101,9 @@
                     <span class="flex items-center gap-1.5"><span class="sc sc--par sc--sm">4</span>Par</span>
                     <span class="flex items-center gap-1.5"><span class="sc sc--bogey sc--sm">5</span>Bogey</span>
                     <span class="flex items-center gap-1.5"><span class="sc sc--double sc--sm">6</span>Double+</span>
+                    @if(!empty($scoring['acceptUrl']))
+                        <span class="flex items-center gap-1.5"><span class="sc sc--conflict sc--sm">!</span>Scores don't match</span>
+                    @endif
                 </div>
             </div>
         </div>
@@ -177,6 +188,25 @@
     const isFinished = (hole, userId) => { const s = shotsOf(hole, userId); return s.length > 0 && s[s.length - 1].result === 'in_basket'; };
     const holeStrokes = (hole, userId) => shotsOf(hole, userId).reduce((sum, s) => sum + s.strokes, 0);
     const isScoreOnly = (hole, userId) => shotsOf(hole, userId)[0]?.scoreOnly === true;
+    const multiScorer = Boolean(state.acceptUrl);
+    const othersOf = (hole, userId) => (hole.entries && hole.entries[userId]) || [];
+    const firstName = name => esc(String(name).split(' ')[0]);
+
+    /**
+     * The hole as the card sees it: open, mine / theirs (one finished copy),
+     * confirmed (finished copies agree) or conflict (they don't).
+     */
+    function holeResult(hole, userId) {
+        const mine = isFinished(hole, userId) ? holeStrokes(hole, userId) : null;
+        const others = othersOf(hole, userId);
+        const values = [...(mine !== null ? [mine] : []), ...others.filter(e => e.finished).map(e => e.strokes)];
+        const base = { mine, others, finishedOthers: others.filter(e => e.finished) };
+        if (!values.length) return { ...base, status: 'open', strokes: null };
+        if (new Set(values).size > 1) return { ...base, status: 'conflict', strokes: null };
+        return { ...base, status: values.length > 1 ? 'confirmed' : mine !== null ? 'mine' : 'theirs', strokes: values[0] };
+    }
+    const settled = (hole, userId) => holeResult(hole, userId).strokes !== null;
+    const conflictHoles = () => playOrder().filter(h => state.players.some(p => holeResult(h, p.id).status === 'conflict'));
     const fmtRel = rel => rel === 0 ? 'E' : (rel > 0 ? '+' + rel : String(rel));
     const relClass = rel => rel < 0 ? 'is-under' : rel > 0 ? 'is-over' : 'is-even';
     const scoreClass = (strokes, par) => {
@@ -192,8 +222,9 @@
     function totals(userId) {
         let strokes = 0, par = 0, thru = 0;
         state.holes.forEach(hole => {
-            if (!isFinished(hole, userId)) return;
-            strokes += holeStrokes(hole, userId);
+            const result = holeResult(hole, userId);
+            if (result.strokes === null) return;
+            strokes += result.strokes;
             par += hole.par;
             thru++;
         });
@@ -272,7 +303,7 @@
     }
 
     function firstOpenHole() {
-        return playOrder().find(hole => !state.players.every(p => isFinished(hole, p.id))) || playOrder()[playOrder().length - 1];
+        return playOrder().find(hole => !state.players.every(p => settled(hole, p.id))) || playOrder()[playOrder().length - 1];
     }
 
     function moveHole(step) {
@@ -285,9 +316,10 @@
     function renderHoleStrip() {
         const hole = currentHole();
         $('hole-strip').innerHTML = playOrder().map(h => {
-            const done = state.players.every(p => isFinished(h, p.id));
-            const started = state.players.some(p => shotsOf(h, p.id).length);
-            return `<button type="button" data-hole="${h.id}" class="${h.id === hole.id ? 'is-active' : ''} ${done ? 'is-done' : started ? 'is-started' : ''}">${h.number}</button>`;
+            const conflict = state.players.some(p => holeResult(h, p.id).status === 'conflict');
+            const done = state.players.every(p => settled(h, p.id));
+            const started = state.players.some(p => shotsOf(h, p.id).length || othersOf(h, p.id).length);
+            return `<button type="button" data-hole="${h.id}" class="${h.id === hole.id ? 'is-active' : ''} ${conflict ? 'is-conflict' : done ? 'is-done' : started ? 'is-started' : ''}" ${conflict ? 'title="Scores don&#39;t match"' : ''}>${h.number}</button>`;
         }).join('');
         $('hole-strip').querySelectorAll('[data-hole]').forEach(btn => btn.addEventListener('click', () => { activeHoleId = Number(btn.dataset.hole); renderAll(); }));
         $('hole-strip').querySelector('.is-active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -339,7 +371,8 @@
                         ${RESULTS.map(r => `<button type="button" data-result="${r.key}" class="ds-shot ${r.cls}" ${canScore ? '' : 'disabled'}>${r.label}</button>`).join('')}
                     </div>`;
 
-            return `<article class="ds-player ${finished ? 'is-finished' : ''}" data-player="${player.id}">
+            const status = holeResult(hole, player.id).status;
+            return `<article class="ds-player ${status === 'conflict' ? 'is-conflict' : finished ? 'is-finished' : ''}" data-player="${player.id}">
                 <header class="flex items-center gap-3">
                     ${avatar(player)}
                     <div class="min-w-0 flex-1">
@@ -358,6 +391,7 @@
                     ${shots.map(s => `<span class="ds-chip ${s.scoreOnly ? '' : resultByKey[s.result]?.cls || ''}">${s.scoreOnly ? '' : s.shotNumber}<b>${esc(chipLabel(s))}</b></span>`).join('')
                       || '<span class="text-xs text-gray-400">Tap where the drive landed.</span>'}
                 </div>
+                ${confirmation(hole, player, canScore)}
                 ${finished ? '' : `<p class="mb-2 text-xs font-semibold text-gray-500">${shots.length ? 'Shot ' + (shots.length + 1) + ' from ' + (LIE_TEXT[lie] || 'after OB') : 'Drive from the tee'}</p>`}
                 ${finished ? '' : shotArea}
                 <button type="button" data-undo class="mt-3 text-xs font-bold text-gray-400 hover:text-red-600 disabled:opacity-40" ${!canScore || !shots.length ? 'disabled' : ''}>Undo last throw</button>
@@ -384,11 +418,12 @@
                 distanceForm.distance.focus();
             }
             card.querySelector('[data-undo]').addEventListener('click', () => undoShot(hole, userId));
+            bindAccept(card, hole, userId);
         });
 
         renderQuickScores(hole, canScore);
 
-        const allDone = state.players.every(p => isFinished(hole, p.id));
+        const allDone = state.players.every(p => settled(hole, p.id));
         $('advance-hole').classList.toggle('hidden', !allDone || index === order.length - 1);
     }
 
@@ -399,8 +434,10 @@
             const t = totals(player.id);
             const strokes = holeStrokes(hole, player.id);
             const finished = isFinished(hole, player.id);
+            // This player's hole is being logged throw by throw (on this phone, or by anyone in a
+            // training round): show it rather than overwrite it with a plain number
             const tracked = shotsOf(hole, player.id).length && !isScoreOnly(hole, player.id);
-            // Someone is logging this player throw by throw on another phone: show it, don't overwrite it
+            const status = holeResult(hole, player.id).status;
             const control = tracked
                 ? `<div class="text-right">
                         <span class="sc ${finished ? scoreClass(strokes, hole.par) : 'sc--pending'}">${strokes}</span>
@@ -412,23 +449,78 @@
                         <button type="button" data-step="1" aria-label="One more" ${canScore && strokes < {{ \App\Models\TrainingRoundShot::MAX_HOLE_SCORE }} ? '' : 'disabled'}>+</button>
                    </div>`;
 
-            return `<div class="ds-quick" data-quick="${player.id}">
-                ${avatar(player)}
-                <div class="min-w-0 flex-1">
-                    <p class="truncate font-bold text-ink">${esc(player.name)}${player.isMe ? ' <span class="text-xs font-semibold text-indigo-600">(you)</span>' : ''}</p>
-                    <p class="font-mono text-[0.68rem] uppercase tracking-wider text-gray-500">
-                        <span class="ds-rel ${relClass(t.rel)}">${t.thru ? fmtRel(t.rel) : '—'}</span>
-                        ${t.thru ? 'thru ' + t.thru : esc(player.division)}
-                    </p>
+            return `<div class="ds-quick ${status === 'conflict' ? 'is-conflict' : ''}" data-quick="${player.id}">
+                <div class="flex items-center gap-3">
+                    ${avatar(player)}
+                    <div class="min-w-0 flex-1">
+                        <p class="truncate font-bold text-ink">${esc(player.name)}${player.isMe ? ' <span class="text-xs font-semibold text-indigo-600">(you)</span>' : ''}</p>
+                        <p class="font-mono text-[0.68rem] uppercase tracking-wider text-gray-500">
+                            <span class="ds-rel ${relClass(t.rel)}">${t.thru ? fmtRel(t.rel) : '—'}</span>
+                            ${t.thru ? 'thru ' + t.thru : esc(player.division)}
+                        </p>
+                    </div>
+                    ${control}
                 </div>
-                ${control}
+                ${confirmation(hole, player, canScore)}
             </div>`;
         }).join('');
 
         $('quick-list').querySelectorAll('[data-quick]').forEach(row => {
             const userId = Number(row.dataset.quick);
             row.querySelectorAll('[data-step]').forEach(btn => btn.addEventListener('click', () => stepScore(hole, userId, Number(btn.dataset.step))));
+            bindAccept(row, hole, userId);
         });
+    }
+
+    /**
+     * How this player's hole stands against the other scorers on the card. Their numbers
+     * stay hidden until you have entered yours, so nobody just copies the first score in.
+     */
+    function confirmation(hole, player, canScore) {
+        if (!multiScorer) return '';
+        const r = holeResult(hole, player.id);
+        const names = list => list.map(e => firstName(e.scorerName)).join(', ');
+
+        if (r.status === 'conflict') {
+            const rows = [
+                ...(r.mine !== null ? [`<li><span>You</span><b class="sc sc--sm ${scoreClass(r.mine, hole.par)}">${r.mine}</b><i></i></li>`] : []),
+                ...r.finishedOthers.map(e => `<li><span>${esc(e.scorerName)}${e.scoreOnly ? '' : ' <small>· tracked</small>'}</span><b class="sc sc--sm ${scoreClass(e.strokes, hole.par)}">${e.strokes}</b>
+                    ${canScore && e.strokes !== r.mine ? `<button type="button" data-accept="${e.scorerId}">Use ${e.strokes}</button>` : '<i></i>'}</li>`),
+            ].join('');
+            return `<div class="ds-conflict" role="alert">
+                <p class="ds-conflict__title"><span>!</span>Scores don't match</p>
+                <ul>${rows}</ul>
+                <p class="ds-conflict__hint">Agree on the score with your card, then use theirs or change yours. The hole doesn't count until they match.</p>
+            </div>`;
+        }
+        if (r.status === 'confirmed') {
+            return `<p class="ds-confirm is-ok">✓ Confirmed${r.mine !== null ? ' with ' + names(r.finishedOthers) : ' by ' + names(r.finishedOthers)}</p>`;
+        }
+        if (r.status === 'theirs') {
+            return `<p class="ds-confirm is-theirs">${names(r.finishedOthers)} entered a score · enter yours to confirm</p>`;
+        }
+        const waiting = r.others.filter(e => !e.finished);
+        if (r.status === 'mine' && waiting.length) {
+            return `<p class="ds-confirm">Waiting for ${names(waiting)} to finish the hole</p>`;
+        }
+        return '';
+    }
+
+    function bindAccept(container, hole, userId) {
+        container.querySelectorAll('[data-accept]').forEach(btn => btn.addEventListener('click', () => acceptScore(hole, userId, Number(btn.dataset.accept))));
+    }
+
+    async function acceptScore(hole, userId, scorerId) {
+        try {
+            const data = await send(state.acceptUrl.replace('__HOLE__', hole.id), { user_id: userId, scorer_id: scorerId });
+            hole.shots[userId] = data.shots.map(normaliseShot);
+            prompt = null;
+            renderAll();
+            toast('Score updated — the hole is confirmed.');
+        } catch (e) {
+            toast(e.message);
+            refresh();
+        }
     }
 
     // −/+ move from the current score (or from par when the hole is still empty); the middle
@@ -525,9 +617,11 @@
             return `<tr>
                 <td class="ds-sticky"><span class="flex items-center gap-2">${avatar(player, 'h-7 w-7')}<span class="max-w-[8rem] truncate">${esc(player.name)}</span></span></td>
                 ${holes.map(h => {
+                    const result = holeResult(h, player.id);
+                    if (result.status === 'conflict') return '<td><span class="sc sc--conflict" title="Scores don&#39;t match">!</span></td>';
+                    if (result.strokes !== null) return `<td><span class="sc ${scoreClass(result.strokes, h.par)}">${result.strokes}</span></td>`;
                     const strokes = holeStrokes(h, player.id);
-                    if (!strokes) return '<td><span class="sc sc--empty">·</span></td>';
-                    return `<td><span class="sc ${isFinished(h, player.id) ? scoreClass(strokes, h.par) : 'sc--pending'}">${strokes}</span></td>`;
+                    return strokes ? `<td><span class="sc sc--pending">${strokes}</span></td>` : '<td><span class="sc sc--empty">·</span></td>';
                 }).join('')}
                 <td class="ds-total font-bold">${t.thru ? t.strokes : '–'}</td>
                 <td class="ds-total"><span class="ds-rel ${relClass(t.rel)}">${t.thru ? fmtRel(t.rel) : '–'}</span></td>
@@ -673,8 +767,39 @@
             : `Scoring opens at tee off (${new Date(state.startsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}). You can already pick who you're scoring for.`;
     }
 
+    function renderConflictBar() {
+        const holes = multiScorer ? conflictHoles() : [];
+        const bar = $('conflict-bar');
+        bar.classList.toggle('hidden', !holes.length);
+        if (!holes.length) return;
+        bar.innerHTML = `<span class="ds-flash__icon">!</span>
+            <span class="flex-1">Scores don't match on ${holes.length === 1 ? 'hole' : 'holes'}</span>
+            <span class="flex flex-wrap gap-1.5">${holes.map(h => `<button type="button" data-conflict-hole="${h.id}" class="ds-conflict__jump">${h.number}</button>`).join('')}</span>`;
+        bar.querySelectorAll('[data-conflict-hole]').forEach(btn => btn.addEventListener('click', () => {
+            activeHoleId = Number(btn.dataset.conflictHole);
+            if (activeTab !== 'score') document.querySelector('[data-tab="score"]').click();
+            else renderAll();
+        }));
+    }
+
+    // Toast once when another scorer's entry turns a hole into a conflict
+    let knownConflicts = null;
+    function noticeNewConflicts() {
+        if (!multiScorer) return;
+        const now = conflictHoles().map(h => h.id);
+        const fresh = knownConflicts ? now.filter(id => !knownConflicts.includes(id)) : [];
+        knownConflicts = now;
+        if (fresh.length) {
+            const numbers = state.holes.filter(h => fresh.includes(h.id)).map(h => h.number).join(', ');
+            toast(`Scores don't match on hole ${numbers} — check with your card.`);
+            if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+        }
+    }
+
     function renderAll() {
         if (!selectedIds) return;
+        renderConflictBar();
+        noticeNewConflicts();
         renderLivePill();
         renderClosedNote();
         if (activeTab === 'score') renderScoreTab();

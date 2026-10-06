@@ -36,6 +36,11 @@ class CompetitionShot extends Model
         return $this->belongsTo(CompetitionHole::class, 'competition_hole_id');
     }
 
+    public function recorder(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'recorded_by');
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
