@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') · DiscStats</title>
     <link rel="icon" href="{{ asset('images/logo.png') }}">
@@ -43,6 +43,12 @@
             ['url' => route('courses.index'), 'label' => 'Courses Map', 'active' => request()->is('courses*'),
                 'icon' => '<path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3zM9 3v15M15 6v15"/>'],
         ];
+        // Phone tab bar: the four main sections, everything else is one tap away under "Menu"
+        $tabLabels = $isGuest
+            ? ['Dashboard' => 'Home', 'Exercises' => 'Exercises', 'Competitions' => 'Events', 'Players' => 'Players']
+            : ['Dashboard' => 'Home', 'Exercises' => 'Exercises', 'Competitions' => 'Events', 'Training Rounds' => 'Training'];
+        $tabItems = collect($navItems)->filter(fn ($item) => isset($tabLabels[$item['label']]))->values();
+        $menuActive = collect($navItems)->contains(fn ($item) => $item['active'] && !isset($tabLabels[$item['label']]));
     @endphp
 
     <nav class="ds-nav">
@@ -86,38 +92,63 @@
                 </form>
             </div>
 
-            <button type="button" class="ds-burger" id="mobile-menu-btn" aria-label="Open menu" aria-expanded="false">
-                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h16"/></svg>
+            <button type="button" class="ds-burger" data-menu-toggle aria-controls="mobile-menu" aria-expanded="false" aria-label="Open menu">
+                <svg class="ds-burger__open h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h16"/></svg>
+                <svg class="ds-burger__close h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
             </button>
         </div>
+    </nav>
 
-        <div class="ds-mobile" id="mobile-menu" style="display: none;">
-            <a href="{{ $isGuest ? url('/dashboard') : route('profile.show', $user) }}" class="mb-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-white">
-                <span class="ds-avatar" style="width: 2.75rem; height: 2.75rem;">
-                    @if($user->avatar)
-                        <img src="{{ asset('storage/' . $user->avatar) }}" alt="">
-                    @else
-                        <span>{{ strtoupper(substr($user->name, 0, 1)) }}</span>
-                    @endif
-                </span>
-                <span>
-                    <span class="block font-bold">{{ $user->name }}</span>
-                    <span @class(['ds-user__role', 'is-admin' => $user->isAdmin()])>{{ $roleLabel }}</span>
-                </span>
-            </a>
-            <div class="space-y-1">
-                @foreach($navItems as $item)
-                    <a href="{{ $item['url'] }}" @class(['ds-link', 'is-active' => $item['active']])>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{!! $item['icon'] !!}</svg>
-                        {{ $item['label'] }}
-                    </a>
-                @endforeach
-            </div>
-            <form action="{{ route('logout') }}" method="POST" class="mt-6 border-t border-white/10 pt-4">
-                @csrf
-                <button type="submit" class="ds-btn ds-btn--ghost w-full">{{ $isGuest ? 'Exit guest mode' : 'Log out' }}</button>
-            </form>
+    {{-- Phone / tablet menu: full screen under the top bar --}}
+    <div class="ds-mobile" id="mobile-menu" aria-hidden="true">
+        <a href="{{ $isGuest ? url('/dashboard') : route('profile.show', $user) }}" class="ds-mobile__me">
+            <span class="ds-avatar">
+                @if($user->avatar)
+                    <img src="{{ asset('storage/' . $user->avatar) }}" alt="">
+                @else
+                    <span>{{ strtoupper(substr($user->name, 0, 1)) }}</span>
+                @endif
+            </span>
+            <span class="min-w-0 flex-1">
+                <span class="block truncate font-display text-lg font-extrabold">{{ $user->name }}</span>
+                <span @class(['ds-user__role', 'is-admin' => $user->isAdmin()])>{{ $roleLabel }}{{ $isGuest ? '' : ' · ' . ($user->rating ? 'Rating ' . $user->rating : 'Unrated') }}</span>
+            </span>
+            @unless($isGuest)
+                <span class="ds-mobile__pill">Profile →</span>
+            @endunless
+        </a>
+
+        <p class="ds-mobile__label">Go to</p>
+        <div class="ds-mobile__grid">
+            @foreach($navItems as $item)
+                <a href="{{ $item['url'] }}" @class(['ds-mobile__tile', 'is-active' => $item['active']])>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{!! $item['icon'] !!}</svg>
+                    {{ $item['label'] }}
+                </a>
+            @endforeach
         </div>
+
+        <form action="{{ route('logout') }}" method="POST" class="mt-6">
+            @csrf
+            <button type="submit" class="ds-mobile__logout">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                {{ $isGuest ? 'Exit guest mode' : 'Log out' }}
+            </button>
+        </form>
+    </div>
+
+    {{-- Phone / tablet tab bar --}}
+    <nav class="ds-tabbar" aria-label="Main">
+        @foreach($tabItems as $item)
+            <a href="{{ $item['url'] }}" @class(['ds-tabbar__item', 'is-active' => $item['active']]) @if($item['active']) aria-current="page" @endif>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{!! $item['icon'] !!}</svg>
+                <span>{{ $tabLabels[$item['label']] }}</span>
+            </a>
+        @endforeach
+        <button type="button" @class(['ds-tabbar__item', 'is-active' => $menuActive]) data-menu-toggle aria-controls="mobile-menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+            <span>Menu</span>
+        </button>
     </nav>
 
     <main class="mx-auto w-full max-w-7xl overflow-x-hidden px-3 py-5 sm:px-6 sm:py-8">
@@ -167,15 +198,25 @@
     </footer>
 
     <script>
-        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
-        const mobileMenu = document.getElementById('mobile-menu');
+        (() => {
+            const menu = document.getElementById('mobile-menu');
+            const toggles = document.querySelectorAll('[data-menu-toggle]');
 
-        mobileMenuBtn.addEventListener('click', () => {
-            const open = mobileMenu.style.display === 'none';
-            mobileMenu.style.display = open ? 'block' : 'none';
-            mobileMenuBtn.setAttribute('aria-expanded', open);
-            document.body.style.overflow = open ? 'hidden' : '';
-        });
+            function setMenu(open) {
+                document.body.classList.toggle('is-menu-open', open);
+                menu.setAttribute('aria-hidden', String(!open));
+                toggles.forEach(button => {
+                    button.setAttribute('aria-expanded', String(open));
+                    if (button.classList.contains('ds-burger')) button.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+                });
+            }
+
+            toggles.forEach(button => button.addEventListener('click', () => setMenu(!document.body.classList.contains('is-menu-open'))));
+            menu.querySelectorAll('a').forEach(link => link.addEventListener('click', () => setMenu(false)));
+            document.addEventListener('keydown', event => { if (event.key === 'Escape') setMenu(false); });
+            // Rotating to a wide screen shows the desktop bar, so drop the open menu
+            matchMedia('(min-width: 1120px)').addEventListener('change', event => { if (event.matches) setMenu(false); });
+        })();
     </script>
     @stack('scripts')
 </body>

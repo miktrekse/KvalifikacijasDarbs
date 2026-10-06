@@ -217,13 +217,75 @@
     .ds-avatar > span { display: grid; place-items: center; width: calc(100% - 4px); height: calc(100% - 4px); border-radius: 999px; background: #e9fbf1; }
     .ds-logout { display: grid; place-items: center; width: 2.2rem; height: 2.2rem; border-radius: 999px; color: rgb(255 255 255 / 0.6); transition: color 0.15s, background 0.15s; cursor: pointer; }
     .ds-logout:hover { color: white; background: rgb(242 107 58 / 0.25); }
-    .ds-burger { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; margin-left: auto; border-radius: 0.8rem; color: white; background: rgb(255 255 255 / 0.07); cursor: pointer; }
-    .ds-mobile { position: fixed; inset: 4.25rem 0 0; z-index: 999; overflow-y: auto; padding: 1rem; background: var(--color-ink) url('/images/topo-dark.svg'); }
-    .ds-mobile .ds-link { display: flex; padding: 0.9rem 1rem; font-size: 1rem; border-radius: 1rem; }
-    .ds-mobile .ds-link svg { width: 1.2rem; height: 1.2rem; }
+    .ds-burger { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; margin-left: auto; border-radius: 0.8rem; color: white; background: rgb(255 255 255 / 0.07); cursor: pointer; transition: background 0.15s; }
+    .ds-burger__close, .is-menu-open .ds-burger__open { display: none; }
+    .is-menu-open .ds-burger__close { display: block; }
+    .is-menu-open .ds-burger { background: rgb(255 255 255 / 0.16); }
+
+    /* Phone / tablet menu. Lives outside .ds-nav: its backdrop blur would make this fixed panel size itself to the bar. */
+    .ds-mobile {
+        position: fixed;
+        inset: 4.25rem 0 0;
+        z-index: 990;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 1.25rem 1rem calc(6rem + env(safe-area-inset-bottom));
+        color: white;
+        background:
+            radial-gradient(500px 300px at 100% 0%, rgb(63 189 130 / 0.22), transparent 60%),
+            url('/images/topo-dark.svg'),
+            var(--color-ink);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-0.75rem);
+        transition: opacity 0.2s, transform 0.2s, visibility 0s 0.2s;
+    }
+    .is-menu-open { overflow: hidden; }
+    .is-menu-open .ds-mobile { opacity: 1; visibility: visible; transform: none; transition: opacity 0.2s, transform 0.2s; }
+    .ds-mobile__me { display: flex; align-items: center; gap: 0.85rem; padding: 0.85rem; border-radius: 1.25rem; background: rgb(255 255 255 / 0.06); border: 1px solid rgb(255 255 255 / 0.1); }
+    .ds-mobile__me .ds-avatar { width: 3.1rem; height: 3.1rem; font-size: 1.1rem; }
+    .ds-mobile__pill { flex-shrink: 0; padding: 0.35rem 0.75rem; border-radius: 999px; font-size: 0.75rem; font-weight: 800; color: var(--color-ink); background: linear-gradient(180deg, #5fd69b, #2fb072); }
+    .ds-mobile__label { margin: 1.5rem 0 0.6rem 0.25rem; font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: rgb(255 255 255 / 0.45); }
+    .ds-mobile__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+    .ds-mobile__tile { display: flex; flex-direction: column; gap: 0.75rem; min-height: 6rem; padding: 1rem; border-radius: 1.2rem; font-size: 0.95rem; font-weight: 800; color: rgb(255 255 255 / 0.9); background: rgb(255 255 255 / 0.05); border: 1px solid rgb(255 255 255 / 0.08); transition: background 0.15s, transform 0.1s; }
+    .ds-mobile__tile svg { width: 1.5rem; height: 1.5rem; color: #5fd69b; }
+    .ds-mobile__tile:active { transform: scale(0.97); }
+    .ds-mobile__tile:hover { background: rgb(255 255 255 / 0.1); }
+    .ds-mobile__tile.is-active { color: var(--color-ink); background: linear-gradient(160deg, #5fd69b, #2fb072); border-color: transparent; box-shadow: 0 10px 24px -12px rgb(63 189 130 / 0.8); }
+    .ds-mobile__tile.is-active svg { color: var(--color-ink); }
+    .ds-mobile__logout { display: flex; width: 100%; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.9rem; border-radius: 1.1rem; font-weight: 800; color: #ffb59a; background: rgb(242 107 58 / 0.12); border: 1px solid rgb(242 107 58 / 0.25); cursor: pointer; }
+
+    /* Phone / tablet tab bar */
+    .ds-tabbar {
+        position: fixed;
+        inset: auto 0 0;
+        z-index: 995;
+        display: grid;
+        grid-auto-columns: minmax(0, 1fr);
+        grid-auto-flow: column;
+        gap: 0.25rem;
+        padding: 0.4rem 0.5rem calc(0.4rem + env(safe-area-inset-bottom));
+        background: rgb(12 23 20 / 0.94);
+        backdrop-filter: blur(14px);
+        border-top: 1px solid rgb(255 255 255 / 0.08);
+        box-shadow: 0 -12px 30px -18px rgb(0 0 0 / 0.6);
+    }
+    .ds-tabbar__item { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.2rem; min-height: 3.4rem; padding: 0.35rem 0.25rem; border-radius: 1rem; font-size: 0.68rem; font-weight: 700; color: rgb(255 255 255 / 0.6); cursor: pointer; transition: color 0.15s, background 0.15s; }
+    .ds-tabbar__item svg { width: 1.4rem; height: 1.4rem; transition: transform 0.15s; }
+    .ds-tabbar__item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ds-tabbar__item.is-active { color: #5fd69b; }
+    .ds-tabbar__item.is-active::before { content: ''; position: absolute; top: -0.4rem; width: 1.8rem; height: 3px; border-radius: 0 0 3px 3px; background: #5fd69b; box-shadow: 0 0 12px #5fd69b; }
+    .ds-tabbar__item:active svg { transform: scale(0.9); }
+    .is-menu-open .ds-tabbar__item[data-menu-toggle] { color: white; background: rgb(255 255 255 / 0.1); }
+
+    @media (max-width: 1119px) {
+        /* Room for the tab bar so it never covers the end of a page or a toast */
+        body { padding-bottom: calc(4.6rem + env(safe-area-inset-bottom)); }
+        .ds-toast { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+    }
     @media (min-width: 1120px) {
         .ds-links, .ds-user { display: flex; }
-        .ds-burger, .ds-mobile { display: none !important; }
+        .ds-burger, .ds-mobile, .ds-tabbar { display: none !important; }
     }
     @media (min-width: 1120px) and (max-width: 1380px) {
         .ds-link svg { display: none; }
