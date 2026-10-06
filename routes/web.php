@@ -72,6 +72,7 @@ Route::middleware(['auth', 'readonly.guest'])->group(function () {
     Route::get('/training/{round}', [TrainingRoundController::class, 'show'])->name('training.show');
     Route::get('/training/{round}/data', [TrainingRoundController::class, 'data'])->name('training.data');
     Route::post('/training/{round}/complete', [TrainingRoundController::class, 'complete'])->name('training.complete');
+    Route::delete('/training/{round}', [TrainingRoundController::class, 'destroy'])->name('training.destroy');
     Route::post('/training/{round}/holes/{hole}/shots', [TrainingRoundController::class, 'addShot'])->name('training.shots.store');
     Route::post('/training/{round}/holes/{hole}/shots/undo', [TrainingRoundController::class, 'undoShot'])->name('training.shots.undo');
     Route::post('/training/{round}/holes/{hole}/score', [TrainingRoundController::class, 'setScore'])->name('training.shots.score');

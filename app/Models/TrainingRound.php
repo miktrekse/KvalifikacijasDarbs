@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -38,7 +39,44 @@ class TrainingRound extends Model
 
     public function players(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'training_round_players')->withTimestamps();
+        return $this->belongsToMany(User::class, 'training_round_players')->withPivot('removed_at')->withTimestamps();
+    }
+
+    /** Rounds this player is on and hasn't deleted from their list. */
+    public function scopeVisibleTo(Builder $query, int $userId): Builder
+    {
+        return $query->whereHas('players', fn ($players) => $players
+            ->where('user_id', $userId)
+            ->whereNull('training_round_players.removed_at'));
+    }
+
+    public function isVisibleTo(int $userId): bool
+    {
+        return $this->players()->where('user_id', $userId)->wherePivotNull('removed_at')->exists();
+    }
+
+    /** Players who still have the round in their list, other than this one. */
+    public function otherActivePlayers(int $userId): Collection
+    {
+        return $this->players()->where('user_id', '!=', $userId)->wherePivotNull('removed_at')->get();
+    }
+
+    /**
+     * Deletes the round from one player's list. Everyone else keeps it (with this
+     * player's scores) until they delete it too; the last one out deletes it for good.
+     * Returns true when the round itself was deleted.
+     */
+    public function removeFor(int $userId): bool
+    {
+        $this->players()->updateExistingPivot($userId, ['removed_at' => now()]);
+
+        if ($this->players()->wherePivotNull('removed_at')->exists()) {
+            return false;
+        }
+
+        $this->delete();
+
+        return true;
     }
 
     public function holes(): HasMany

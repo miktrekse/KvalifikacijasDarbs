@@ -28,6 +28,20 @@
                         <button type="submit" class="ds-btn ds-btn--ghost !py-2">Finish round</button>
                     </form>
                 @endif
+                @php
+                    $othersKeeping = $round->players->where('id', '!=', Auth::id())->whereNull('pivot.removed_at');
+                    $deleteConfirm = $othersKeeping->isEmpty()
+                        ? 'Delete this round for good? Its scores and stats are removed and this can\'t be undone.'
+                        : 'Remove this round from your list and stats? ' . $othersKeeping->pluck('name')->join(', ', ' and ') . ' will still see it until they delete it too.';
+                @endphp
+                <form method="POST" action="{{ route('training.destroy', $round->id) }}" onsubmit="return confirm(@js($deleteConfirm));">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="ds-btn ds-btn--ghost !py-2 hover:!border-red-400/60 hover:!bg-red-500/20" title="{{ $othersKeeping->isEmpty() ? 'Delete round' : 'Remove from my rounds' }}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+                        {{ $othersKeeping->isEmpty() ? 'Delete' : 'Remove' }}
+                    </button>
+                </form>
             </div>
         </div>
     </section>

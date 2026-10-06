@@ -76,7 +76,7 @@ class ProfileController extends Controller
      */
     private function practiceStats(User $user): array
     {
-        $rounds = TrainingRound::whereHas('players', fn ($query) => $query->where('user_id', $user->id))
+        $rounds = TrainingRound::visibleTo($user->id)
             ->with(['holes.shots' => fn ($query) => $query->where('user_id', $user->id)])
             ->orderByDesc('created_at')
             ->get();

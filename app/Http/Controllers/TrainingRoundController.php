@@ -13,12 +13,10 @@ use Illuminate\Validation\Rule;
 
 class TrainingRoundController extends Controller
 {
+    /** Players on the round who haven't deleted it from their list. */
     private function abortUnlessParticipant(TrainingRound $round): void
     {
-        $isParticipant = $round->user_id === Auth::id()
-            || $round->players()->where('user_id', Auth::id())->exists();
-
-        abort_unless($isParticipant, 403);
+        abort_unless($round->isVisibleTo(Auth::id()), 404);
     }
 
     public function index()
@@ -26,13 +24,13 @@ class TrainingRoundController extends Controller
         $mine = fn ($query) => $query->where('user_id', Auth::id());
 
         $rounds = TrainingRound::with(['user', 'players', 'holes.shots'])
-            ->whereHas('players', $mine)
+            ->visibleTo(Auth::id())
             ->orderByDesc('created_at')
             ->paginate(10);
 
         // Career numbers across every round, counting only the current player's throws
         $allRounds = TrainingRound::with(['players' => $mine, 'holes.shots' => $mine])
-            ->whereHas('players', $mine)
+            ->visibleTo(Auth::id())
             ->get();
         $myTotals = $allRounds->map(fn (TrainingRound $round) => ['round' => $round] + ($round->playerTotals()->get(Auth::id()) ?? ['thru' => 0]));
         $fullRounds = $myTotals->filter(fn ($t) => $t['thru'] > 0 && $t['thru'] === $t['round']->holes_count);
@@ -304,6 +302,22 @@ class TrainingRoundController extends Controller
                 'score_only' => true,
             ] : null,
         ]);
+    }
+
+    /**
+     * Deletes the round from your list. Anyone else who played it keeps it until
+     * they delete it too; once nobody has it left, it is gone for good.
+     */
+    public function destroy(TrainingRound $round)
+    {
+        $this->abortUnlessParticipant($round);
+
+        $others = $round->otherActivePlayers(Auth::id());
+        $round->removeFor(Auth::id());
+
+        return redirect()->route('training.index')->with('success', $others->isEmpty()
+            ? 'Training round deleted.'
+            : 'Training round removed from your list. ' . $others->pluck('name')->join(', ', ' and ') . ' can still see it.');
     }
 
     public function complete(TrainingRound $round)
