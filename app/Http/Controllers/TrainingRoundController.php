@@ -8,6 +8,7 @@ use App\Models\TrainingRoundShot;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class TrainingRoundController extends Controller
@@ -164,6 +165,7 @@ class TrainingRoundController extends Controller
                     'strokes' => $shot->strokes,
                     'obLie' => $shot->ob_lie,
                     'distanceM' => $shot->distance_m,
+                    'scoreOnly' => (bool) $shot->score_only,
                 ])->values()),
             ])->values(),
         ];
@@ -259,6 +261,48 @@ class TrainingRoundController extends Controller
 
         return response()->json([
             'hole_strokes' => (int) $hole->shots()->where('user_id', $validated['user_id'])->sum('strokes'),
+        ]);
+    }
+
+    /**
+     * Scores a whole hole as one number (UDisc-style) for a player whose throws
+     * aren't tracked shot by shot. An empty score clears the hole again.
+     */
+    public function setScore(Request $request, TrainingRound $round, TrainingRoundHole $hole)
+    {
+        $this->abortUnlessParticipant($round);
+        abort_unless($hole->training_round_id === $round->id, 404);
+        abort_if($round->isCompleted(), 422, 'This round is already completed.');
+
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', Rule::exists('training_round_players', 'user_id')->where('training_round_id', $round->id)],
+            'strokes' => ['nullable', 'integer', 'min:1', 'max:' . TrainingRoundShot::MAX_HOLE_SCORE],
+        ]);
+        $userId = (int) $validated['user_id'];
+        $strokes = $validated['strokes'] ?? null;
+
+        $shot = DB::transaction(function () use ($hole, $userId, $strokes) {
+            $shots = $hole->shots()->where('user_id', $userId)->lockForUpdate()->get();
+            abort_if($shots->contains(fn (TrainingRoundShot $shot) => !$shot->score_only), 422, 'This hole is being tracked shot by shot for that player.');
+
+            $hole->shots()->where('user_id', $userId)->delete();
+
+            return $strokes ? $hole->shots()->create([
+                'user_id' => $userId,
+                'shot_number' => 1,
+                'result' => 'in_basket',
+                'strokes' => $strokes,
+                'score_only' => true,
+            ]) : null;
+        });
+
+        return response()->json([
+            'shot' => $shot ? [
+                'shot_number' => $shot->shot_number,
+                'result' => $shot->result,
+                'strokes' => $shot->strokes,
+                'score_only' => true,
+            ] : null,
         ]);
     }
 

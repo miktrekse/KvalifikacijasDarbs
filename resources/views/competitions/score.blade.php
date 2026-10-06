@@ -44,6 +44,7 @@
             'storageKey' => 'discstats:comp-' . $competition->id . ':card-' . $group->id . ':scoring-for',
             'shotUrl' => route('competitions.shots.store', ['id' => $competition->id, 'hole' => '__HOLE__']),
             'undoUrl' => route('competitions.shots.undo', ['id' => $competition->id, 'hole' => '__HOLE__']),
+            'scoreUrl' => route('competitions.shots.score', ['id' => $competition->id, 'hole' => '__HOLE__']),
             'closedMessage' => 'This competition is finished — the scorecard is read-only.',
             'dataUrl' => route('competitions.score.data', ['id' => $competition->id, 'group' => $group->number]),
         ];

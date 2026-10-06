@@ -21,12 +21,14 @@ class CompetitionShot extends Model
         'ob_lie',
         'strokes',
         'distance_m',
+        'score_only',
     ];
 
     protected $casts = [
         'shot_number' => 'integer',
         'strokes' => 'integer',
         'distance_m' => 'integer',
+        'score_only' => 'boolean',
     ];
 
     public function hole(): BelongsTo

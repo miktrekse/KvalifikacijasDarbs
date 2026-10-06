@@ -1,17 +1,19 @@
 {{--
     Shot-by-shot scorekeeper shared by competitions and training rounds:
-    "who are you scoring for" picker, hole entry, UDisc-style scorecard and stats.
+    "who are you tracking stats for" picker, hole entry, UDisc-style scorecard and stats.
+    Picked players are tracked shot by shot; everyone else on the card gets a quick
+    per-hole score (a plain number, like UDisc) that counts for totals but not stats.
 
     Expects $scoring with players, holes, startingHole, scoringOpen, closed,
-    startsAt, closedMessage, storageKey, shotUrl / undoUrl (with __HOLE__
+    startsAt, closedMessage, storageKey, shotUrl / undoUrl / scoreUrl (with __HOLE__
     placeholder) and an optional dataUrl that is polled for other scorers' throws.
 --}}
     {{-- Step 1: choose who you are keeping score for --}}
     <section id="picker" class="ds-card hidden">
         <div class="ds-card__head">
             <div>
-                <h2 class="ds-card__title">Who are you scoring for?</h2>
-                <p class="mt-1 text-sm text-gray-500">Pick the players whose throws you'll enter on this phone. Everyone's scores stay visible on the scorecard.</p>
+                <h2 class="ds-card__title">Who are you tracking stats for?</h2>
+                <p class="mt-1 text-sm text-gray-500">Picked players are tracked throw by throw for full stats. You keep score for everyone else on the card too — just enter a number per hole, like 3 or 4.</p>
             </div>
         </div>
         <div class="ds-card__body">
@@ -35,7 +37,7 @@
                 <button type="button" data-tab="stats">Stats</button>
             </div>
             <button type="button" id="change-players" class="text-sm font-bold text-gray-500 hover:text-indigo-700">
-                Scoring for <span id="scoring-for-count"></span> · change
+                Stats for <span id="scoring-for-count"></span> · change
             </button>
         </div>
 
@@ -61,6 +63,17 @@
             </div>
 
             <div id="hole-players" class="grid gap-4 md:grid-cols-2"></div>
+
+            {{-- Everyone not tracked shot by shot: just the hole score --}}
+            <div id="quick-scores" class="ds-card hidden">
+                <div class="ds-card__head">
+                    <div>
+                        <h3 class="ds-card__title">Scores</h3>
+                        <p class="mt-0.5 text-xs text-gray-500">Throws on this hole. Starts at par — tap it to confirm, or use − / +.</p>
+                    </div>
+                </div>
+                <div id="quick-list" class="ds-card__body !pt-3"></div>
+            </div>
 
             <button type="button" id="advance-hole" class="ds-submit hidden">
                 Next hole
@@ -127,7 +140,7 @@
     const positionOf = shot => shot.result === 'out_of_bounds' ? (shot.obLie || null) : shot.result;
     // Where the next throw comes from (null = an older OB recorded without its lie)
     const lieFor = shots => shots.length ? positionOf(shots[shots.length - 1]) : 'tee';
-    const chipLabel = shot => shot.result === 'out_of_bounds'
+    const chipLabel = shot => shot.scoreOnly ? shot.strokes + ' throws · score only' : shot.result === 'out_of_bounds'
         ? 'OB' + (shot.obLie ? '→' + obLieByKey[shot.obLie].short : '')
         : (shot.result === 'in_basket' && shot.distanceM ? 'In ' + shot.distanceM + 'm' : (resultByKey[shot.result]?.short || shot.result));
     const normaliseShot = shot => ({
@@ -136,6 +149,7 @@
         strokes: shot.strokes,
         obLie: shot.obLie ?? shot.ob_lie ?? null,
         distanceM: shot.distanceM ?? shot.distance_m ?? null,
+        scoreOnly: Boolean(shot.scoreOnly ?? shot.score_only),
     });
     const SCORE_NAMES = { '-3': 'Albatross', '-2': 'Eagle', '-1': 'Birdie', '0': 'Par', '1': 'Bogey', '2': 'Double bogey', '3': 'Triple bogey' };
 
@@ -153,6 +167,8 @@
     let pending = 0;
     // An open follow-up question for one player's throw: { userId, holeId, type: 'ob' | 'distance' }
     let prompt = null;
+    // Quick scores waiting to be saved, keyed "holeId:userId", so fast taps send one request
+    const scoreTimers = new Map();
 
     // ---------- helpers ----------
     const $ = id => document.getElementById(id);
@@ -160,6 +176,7 @@
     const shotsOf = (hole, userId) => hole.shots[userId] || [];
     const isFinished = (hole, userId) => { const s = shotsOf(hole, userId); return s.length > 0 && s[s.length - 1].result === 'in_basket'; };
     const holeStrokes = (hole, userId) => shotsOf(hole, userId).reduce((sum, s) => sum + s.strokes, 0);
+    const isScoreOnly = (hole, userId) => shotsOf(hole, userId)[0]?.scoreOnly === true;
     const fmtRel = rel => rel === 0 ? 'E' : (rel > 0 ? '+' + rel : String(rel));
     const relClass = rel => rel < 0 ? 'is-under' : rel > 0 ? 'is-over' : 'is-even';
     const scoreClass = (strokes, par) => {
@@ -230,7 +247,7 @@
         $('change-players').classList.toggle('hidden', state.players.length === 1);
         $('scoring-for-count').textContent = selectedIds.length === state.players.length
             ? 'everyone'
-            : selectedIds.length + ' player' + (selectedIds.length === 1 ? '' : 's');
+            : selectedIds.length ? selectedIds.length + ' player' + (selectedIds.length === 1 ? '' : 's') : 'nobody (scores only)';
         renderAll();
     }
 
@@ -241,9 +258,7 @@
     });
 
     $('picker-start').addEventListener('click', () => {
-        const ids = [...$('picker-list').querySelectorAll('input:checked')].map(b => Number(b.value));
-        if (!ids.length) { toast('Pick at least one player to score for.'); return; }
-        selectedIds = ids;
+        selectedIds = [...$('picker-list').querySelectorAll('input:checked')].map(b => Number(b.value));
         saveSelection();
         activeHoleId = firstOpenHole().id;
         showScoring();
@@ -257,7 +272,7 @@
     }
 
     function firstOpenHole() {
-        return playOrder().find(hole => !selectedIds.every(id => isFinished(hole, id))) || playOrder()[playOrder().length - 1];
+        return playOrder().find(hole => !state.players.every(p => isFinished(hole, p.id))) || playOrder()[playOrder().length - 1];
     }
 
     function moveHole(step) {
@@ -340,7 +355,7 @@
                     </div>
                 </header>
                 <div class="ds-shotlog">
-                    ${shots.map(s => `<span class="ds-chip ${resultByKey[s.result]?.cls || ''}">${s.shotNumber}<b>${esc(chipLabel(s))}</b></span>`).join('')
+                    ${shots.map(s => `<span class="ds-chip ${s.scoreOnly ? '' : resultByKey[s.result]?.cls || ''}">${s.scoreOnly ? '' : s.shotNumber}<b>${esc(chipLabel(s))}</b></span>`).join('')
                       || '<span class="text-xs text-gray-400">Tap where the drive landed.</span>'}
                 </div>
                 ${finished ? '' : `<p class="mb-2 text-xs font-semibold text-gray-500">${shots.length ? 'Shot ' + (shots.length + 1) + ' from ' + (LIE_TEXT[lie] || 'after OB') : 'Drive from the tee'}</p>`}
@@ -371,8 +386,75 @@
             card.querySelector('[data-undo]').addEventListener('click', () => undoShot(hole, userId));
         });
 
-        const allDone = players.length && players.every(p => isFinished(hole, p.id));
+        renderQuickScores(hole, canScore);
+
+        const allDone = state.players.every(p => isFinished(hole, p.id));
         $('advance-hole').classList.toggle('hidden', !allDone || index === order.length - 1);
+    }
+
+    function renderQuickScores(hole, canScore) {
+        const players = state.players.filter(p => !selectedIds.includes(p.id));
+        $('quick-scores').classList.toggle('hidden', !players.length);
+        $('quick-list').innerHTML = players.map(player => {
+            const t = totals(player.id);
+            const strokes = holeStrokes(hole, player.id);
+            const finished = isFinished(hole, player.id);
+            const tracked = shotsOf(hole, player.id).length && !isScoreOnly(hole, player.id);
+            // Someone is logging this player throw by throw on another phone: show it, don't overwrite it
+            const control = tracked
+                ? `<div class="text-right">
+                        <span class="sc ${finished ? scoreClass(strokes, hole.par) : 'sc--pending'}">${strokes}</span>
+                        <p class="mt-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-gray-400">${finished ? 'Tracked' : 'In play'}</p>
+                   </div>`
+                : `<div class="ds-stepper ${finished ? 'is-set' : ''}">
+                        <button type="button" data-step="-1" aria-label="One less" ${canScore && (!finished || strokes > 1) ? '' : 'disabled'}>−</button>
+                        <button type="button" data-step="0" class="ds-stepper__value ${finished ? scoreClass(strokes, hole.par) : ''}" aria-label="${finished ? strokes + ' throws, tap to clear' : 'Confirm par'}" ${canScore ? '' : 'disabled'}>${finished ? strokes : hole.par}</button>
+                        <button type="button" data-step="1" aria-label="One more" ${canScore && strokes < {{ \App\Models\TrainingRoundShot::MAX_HOLE_SCORE }} ? '' : 'disabled'}>+</button>
+                   </div>`;
+
+            return `<div class="ds-quick" data-quick="${player.id}">
+                ${avatar(player)}
+                <div class="min-w-0 flex-1">
+                    <p class="truncate font-bold text-ink">${esc(player.name)}${player.isMe ? ' <span class="text-xs font-semibold text-indigo-600">(you)</span>' : ''}</p>
+                    <p class="font-mono text-[0.68rem] uppercase tracking-wider text-gray-500">
+                        <span class="ds-rel ${relClass(t.rel)}">${t.thru ? fmtRel(t.rel) : '—'}</span>
+                        ${t.thru ? 'thru ' + t.thru : esc(player.division)}
+                    </p>
+                </div>
+                ${control}
+            </div>`;
+        }).join('');
+
+        $('quick-list').querySelectorAll('[data-quick]').forEach(row => {
+            const userId = Number(row.dataset.quick);
+            row.querySelectorAll('[data-step]').forEach(btn => btn.addEventListener('click', () => stepScore(hole, userId, Number(btn.dataset.step))));
+        });
+    }
+
+    // −/+ move from the current score (or from par when the hole is still empty); the middle
+    // button confirms par on an empty hole and clears a scored one.
+    function stepScore(hole, userId, step) {
+        const current = isFinished(hole, userId) ? holeStrokes(hole, userId) : null;
+        const next = step === 0
+            ? (current ? null : hole.par)
+            : Math.min(Math.max((current ?? hole.par) + step, 1), {{ \App\Models\TrainingRoundShot::MAX_HOLE_SCORE }});
+
+        hole.shots[userId] = next ? [{ shotNumber: 1, result: 'in_basket', strokes: next, obLie: null, distanceM: null, scoreOnly: true }] : [];
+        renderAll();
+
+        const key = hole.id + ':' + userId;
+        clearTimeout(scoreTimers.get(key));
+        scoreTimers.set(key, setTimeout(async () => {
+            try {
+                await send(state.scoreUrl.replace('__HOLE__', hole.id), { user_id: userId, strokes: next });
+            } catch (e) {
+                toast(e.message);
+                scoreTimers.delete(key);
+                refresh();
+                return;
+            }
+            scoreTimers.delete(key);
+        }, 450));
     }
 
     async function send(url, body) {
@@ -462,12 +544,16 @@
         let fairwayHits = 0, c1r = 0, c2r = 0, obs = 0, scrambles = 0, scrambleChances = 0;
         let c1Attempts = 0, c1Makes = 0, c2Attempts = 0, c2Makes = 0, aces = 0, longestIn = 0;
 
+        let tracked = 0;
         holes.forEach(hole => {
             const shots = shotsOf(hole, userId);
             const strokes = holeStrokes(hole, userId);
             const rel = strokes - hole.par;
             if (strokes === 1) aces++;
             dist[rel <= -2 ? 'eagle' : rel === -1 ? 'birdie' : rel === 0 ? 'par' : rel === 1 ? 'bogey' : 'double']++;
+            // A hole kept as a plain number has no throws to judge
+            if (shots[0].scoreOnly) return;
+            tracked++;
 
             if (['fairway', 'circle_2', 'circle_1', 'in_basket'].includes(shots[0].result)) fairwayHits++;
 
@@ -492,7 +578,7 @@
         });
 
         const t = totals(userId);
-        return { holes: holes.length, dist, fairwayHits, c1r, c2r, obs, scrambles, scrambleChances, c1Attempts, c1Makes, c2Attempts, c2Makes, aces, longestIn, ...t };
+        return { holes: holes.length, tracked, dist, fairwayHits, c1r, c2r, obs, scrambles, scrambleChances, c1Attempts, c1Makes, c2Attempts, c2Makes, aces, longestIn, ...t };
     }
 
     const pct = (n, d) => d ? Math.round((n / d) * 100) : null;
@@ -548,11 +634,12 @@
                     </div>
                 </div>
                 <div class="ds-card p-5">
+                    ${s.tracked < s.holes ? `<p class="mb-4 rounded-xl bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-500">${s.tracked ? `Shot stats cover the ${s.tracked} of ${s.holes} holes tracked throw by throw.` : `Only scores were kept for ${esc(player.name)} — shot stats need throw-by-throw tracking.`}</p>` : ''}
                     <p class="ds-stat__label">Driving &amp; approach</p>
                     <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                        ${ring('Fairway hits', pct(s.fairwayHits, s.holes), `${s.fairwayHits}/${s.holes}`, '#22a268')}
-                        ${ring('C1 in reg.', pct(s.c1r, s.holes), `${s.c1r}/${s.holes}`, '#0ea5e9')}
-                        ${ring('C2 in reg.', pct(s.c2r, s.holes), `${s.c2r}/${s.holes}`, '#8b5cf6')}
+                        ${ring('Fairway hits', pct(s.fairwayHits, s.tracked), `${s.fairwayHits}/${s.tracked}`, '#22a268')}
+                        ${ring('C1 in reg.', pct(s.c1r, s.tracked), `${s.c1r}/${s.tracked}`, '#0ea5e9')}
+                        ${ring('C2 in reg.', pct(s.c2r, s.tracked), `${s.c2r}/${s.tracked}`, '#8b5cf6')}
                     </div>
                     <p class="ds-stat__label mt-6">Putting &amp; recovery</p>
                     <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -607,10 +694,10 @@
 
     // Pull the card's latest throws so scores entered by others on the card show up.
     async function refresh() {
-        if (pending || !state.dataUrl || prompt) return;
+        if (pending || scoreTimers.size || !state.dataUrl || prompt) return;
         try {
             const response = await fetch(state.dataUrl, { headers: { 'Accept': 'application/json' } });
-            if (!response.ok || pending) return;
+            if (!response.ok || pending || scoreTimers.size) return;
             const data = await response.json();
             state.holes = data.holes;
             state.scoringOpen = data.scoringOpen;
@@ -624,7 +711,7 @@
     setInterval(() => { if (!state.scoringOpen) renderLivePill(); }, 1000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 
-    if (selectedIds && selectedIds.length) {
+    if (selectedIds) {
         activeHoleId = firstOpenHole().id;
         showScoring();
     } else {

@@ -63,6 +63,11 @@ class RoundStats
                 $stats['birdies']++;
             }
 
+            // A hole scored as a plain number has no throws to judge
+            if ($shots->first()->score_only) {
+                continue;
+            }
+
             $stats['fairway']['attempts']++;
             $stats['c1r']['attempts']++;
             $stats['c2r']['attempts']++;

@@ -33,6 +33,9 @@ class TrainingRoundShot extends Model
         'drop_zone' => 'Drop zone',
     ];
 
+    /** Highest number a hole can be scored with when only the score is kept. */
+    public const MAX_HOLE_SCORE = 20;
+
     /** Positions inside Circle 2: makes from here are putts, anything further is a throw-in. */
     public const PUTTING_LIES = ['circle_1', 'circle_2'];
 
@@ -44,12 +47,14 @@ class TrainingRoundShot extends Model
         'ob_lie',
         'strokes',
         'distance_m',
+        'score_only',
     ];
 
     protected $casts = [
         'shot_number' => 'integer',
         'strokes' => 'integer',
         'distance_m' => 'integer',
+        'score_only' => 'boolean',
     ];
 
     public function hole(): BelongsTo

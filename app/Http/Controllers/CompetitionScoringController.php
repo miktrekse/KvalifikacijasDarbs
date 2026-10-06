@@ -52,13 +52,7 @@ class CompetitionScoringController extends Controller
                 'number' => $hole->number,
                 'par' => $hole->par,
                 'distanceM' => $hole->distance_m,
-                'shots' => $hole->shots->groupBy('user_id')->map(fn ($shots) => $shots->map(fn (CompetitionShot $shot) => [
-                    'shotNumber' => $shot->shot_number,
-                    'result' => $shot->result,
-                    'strokes' => $shot->strokes,
-                    'obLie' => $shot->ob_lie,
-                    'distanceM' => $shot->distance_m,
-                ])->values()),
+                'shots' => $hole->shots->groupBy('user_id')->map(fn ($shots) => $shots->map(fn (CompetitionShot $shot) => $this->shotPayload($shot))->values()),
             ])->values(),
         ];
     }
@@ -154,14 +148,56 @@ class CompetitionScoringController extends Controller
 
         return response()->json([
             'finished' => $finished,
-            'shot' => [
-                'shotNumber' => $shot->shot_number,
-                'result' => $shot->result,
-                'strokes' => $shot->strokes,
-                'obLie' => $shot->ob_lie,
-                'distanceM' => $shot->distance_m,
-            ],
+            'shot' => $this->shotPayload($shot),
         ]);
+    }
+
+    /**
+     * Scores a whole hole as one number (UDisc-style) for a player whose throws
+     * aren't tracked shot by shot. An empty score clears the hole again.
+     */
+    public function setScore(Request $request, $id, CompetitionHole $hole)
+    {
+        $competition = Competition::findOrFail($id);
+        $userId = $this->authorizeShot($request, $competition, $hole);
+        $strokes = $request->validate([
+            'strokes' => ['nullable', 'integer', 'min:1', 'max:' . TrainingRoundShot::MAX_HOLE_SCORE],
+        ])['strokes'] ?? null;
+
+        $shot = DB::transaction(function () use ($hole, $userId, $strokes) {
+            $shots = $hole->shots()->where('user_id', $userId)->lockForUpdate()->get();
+            abort_if($shots->contains(fn (CompetitionShot $shot) => !$shot->score_only), 422, 'This hole is being tracked shot by shot for that player.');
+
+            $hole->shots()->where('user_id', $userId)->delete();
+
+            return $strokes ? $hole->shots()->create([
+                'user_id' => $userId,
+                'recorded_by' => Auth::id(),
+                'shot_number' => 1,
+                'result' => 'in_basket',
+                'strokes' => $strokes,
+                'score_only' => true,
+            ]) : null;
+        });
+
+        $finished = $shot && $competition->refresh()->finishIfComplete();
+
+        return response()->json([
+            'finished' => $finished,
+            'shot' => $shot ? $this->shotPayload($shot) : null,
+        ]);
+    }
+
+    private function shotPayload(CompetitionShot $shot): array
+    {
+        return [
+            'shotNumber' => $shot->shot_number,
+            'result' => $shot->result,
+            'strokes' => $shot->strokes,
+            'obLie' => $shot->ob_lie,
+            'distanceM' => $shot->distance_m,
+            'scoreOnly' => (bool) $shot->score_only,
+        ];
     }
 
     public function undoShot(Request $request, $id, CompetitionHole $hole)

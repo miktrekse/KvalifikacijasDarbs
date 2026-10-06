@@ -339,7 +339,23 @@
 
     .ds-player { padding: 1.1rem; border-radius: 1.25rem; background: var(--color-chalk); border: 1px solid var(--color-line); box-shadow: var(--shadow-sm); transition: border-color 0.2s, box-shadow 0.2s; }
     .ds-player.is-finished { border-color: var(--color-indigo-200); background: linear-gradient(180deg, #f3fbf6, var(--color-chalk)); }
-    .ds-shotlog { display: flex; flex-wrap: wrap; gap: 0.35rem; min-height: 1.9rem; margin: 0.9rem 0 0.6rem; }
+    /* Quick per-hole score for players not tracked shot by shot */
+    .ds-quick { display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 0.25rem; border-top: 1px dashed var(--color-line); }
+    .ds-quick:first-child { border-top: 0; }
+    .ds-stepper { display: flex; flex-shrink: 0; align-items: center; gap: 0.35rem; }
+    .ds-stepper button { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: 999px; font-family: var(--font-display); font-size: 1.35rem; font-weight: 800; line-height: 1; cursor: pointer; transition: background 0.15s, transform 0.1s, filter 0.15s; }
+    .ds-stepper button:active:not(:disabled) { transform: scale(0.94); }
+    .ds-stepper button:disabled { opacity: 0.3; cursor: not-allowed; }
+    .ds-stepper > button:not(.ds-stepper__value) { color: var(--color-ink); background: var(--color-gray-100); }
+    .ds-stepper > button:not(.ds-stepper__value):hover:not(:disabled) { background: var(--color-indigo-100); }
+    .ds-stepper > .ds-stepper__value { width: 3rem; height: 3rem; font-size: 1.5rem; }
+    /* Empty hole: par shown as a dashed suggestion; scored holes take the scorecard's birdie/bogey colours */
+    .ds-stepper:not(.is-set) .ds-stepper__value { color: var(--color-gray-400); background: white; border: 2px dashed var(--color-gray-300); }
+    .ds-stepper:not(.is-set) .ds-stepper__value:hover:not(:disabled) { color: var(--color-ink); border-color: var(--color-indigo-400); }
+    .ds-stepper__value.sc--par { color: var(--color-ink); background: var(--color-gray-200); }
+    .ds-stepper.is-set .ds-stepper__value:hover:not(:disabled) { filter: brightness(0.94); }
+
+    .ds-shotlog {display: flex; flex-wrap: wrap; gap: 0.35rem; min-height: 1.9rem; margin: 0.9rem 0 0.6rem; }
     .ds-chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.55rem 0.2rem 0.3rem; border-radius: 999px; font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700; background: var(--color-gray-100); color: var(--color-gray-600); }
     .ds-chip b { display: inline-grid; place-items: center; min-width: 1.3rem; padding: 0 0.3rem; height: 1.3rem; border-radius: 999px; background: white; font-weight: 800; }
     .ds-shots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; }

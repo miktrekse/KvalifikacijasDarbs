@@ -41,6 +41,7 @@
         'storageKey' => 'discstats:training-' . $round->id . ':scoring-for',
         'shotUrl' => route('training.shots.store', ['round' => $round->id, 'hole' => '__HOLE__']),
         'undoUrl' => route('training.shots.undo', ['round' => $round->id, 'hole' => '__HOLE__']),
+        'scoreUrl' => route('training.shots.score', ['round' => $round->id, 'hole' => '__HOLE__']),
         'dataUrl' => $round->players->count() > 1 ? route('training.data', $round->id) : null,
     ]])
 </div>
