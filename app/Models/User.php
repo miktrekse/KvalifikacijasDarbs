@@ -43,39 +43,71 @@ class User extends Authenticatable
         return $this->date_of_birth?->age;
     }
 
-    public function meetsDivisionRequirements(string $division, ?int $rating = null): bool
+    /**
+     * Highest rating allowed in each amateur division (PDGA style). Players may always
+     * play up into a higher division, but not down into one rated below them.
+     * Pro, age and junior divisions have no cap.
+     */
+    public const DIVISION_MAX_RATINGS = [
+        'MA1' => 929, 'MA2' => 879, 'MA3' => 819, 'MA4' => 749,
+        'FA2' => 879, 'FA3' => 819, 'FA4' => 749,
+    ];
+
+    private const FEMALE_DIVISIONS = ['FPO', 'FA2', 'FA3', 'FA4', 'FP40', 'FJ18'];
+
+    /** [minimum age, maximum age] for the standard age-limited divisions. */
+    private const DIVISION_AGES = [
+        'MP40' => [40, null], 'MP50' => [50, null], 'MP60' => [60, null], 'FP40' => [40, null],
+        'MJ18' => [null, 17], 'FJ18' => [null, 17], 'MJ15' => [null, 14],
+    ];
+
+    /**
+     * Why this player can't enter a division, or null when they can. Covers the standard
+     * gender, age and rating limits plus an organizer's custom rule for the division.
+     * Unrated players can enter any division until they have an official rating.
+     */
+    public function divisionBlocker(string $division, ?array $customRule = null): ?string
     {
         $age = $this->age();
-        $femaleDivisions = ['FPO', 'FA2', 'FA3', 'FA4', 'FP40', 'FJ18'];
 
-        if (in_array($division, $femaleDivisions, true) && $this->gender !== 'female') {
-            return false;
+        if (in_array($division, self::FEMALE_DIVISIONS, true) && $this->gender !== 'female') {
+            return 'Women only';
+        }
+        if ([$minAge, $maxAge] = self::DIVISION_AGES[$division] ?? null) {
+            if ($age === null) {
+                return 'Needs your date of birth';
+            }
+            if ($minAge !== null && $age < $minAge) {
+                return "Age {$minAge}+";
+            }
+            if ($maxAge !== null && $age > $maxAge) {
+                return 'Under ' . ($maxAge + 1) . ' only';
+            }
+        }
+        $maxRating = self::DIVISION_MAX_RATINGS[$division] ?? null;
+        if ($maxRating !== null && $this->rating !== null && $this->rating > $maxRating) {
+            return "Rated {$maxRating} or below (you're {$this->rating})";
         }
 
-        if ($division === 'MP40' && ($age === null || $age < 40)) return false;
-        if ($division === 'MP50' && ($age === null || $age < 50)) return false;
-        if ($division === 'MP60' && ($age === null || $age < 60)) return false;
-        if ($division === 'FP40' && ($age === null || $age < 40)) return false;
-        if (in_array($division, ['MJ18', 'FJ18'], true) && ($age === null || $age >= 18)) return false;
-        if ($division === 'MJ15' && ($age === null || $age >= 15)) return false;
+        if ($customRule) {
+            if ($customRule['gender'] !== 'any' && $this->gender !== $customRule['gender']) {
+                return ucfirst($customRule['gender']) . ' only';
+            }
+            if (($customRule['min_age'] !== null || $customRule['max_age'] !== null) && $age === null) {
+                return 'Needs your date of birth';
+            }
+            if ($customRule['min_age'] !== null && $age < $customRule['min_age']) {
+                return "Age {$customRule['min_age']}+";
+            }
+            if ($customRule['max_age'] !== null && $age > $customRule['max_age']) {
+                return "Age {$customRule['max_age']} or under";
+            }
+            if ($customRule['min_rating'] !== null && ($this->rating === null || $this->rating < $customRule['min_rating'])) {
+                return "Rated {$customRule['min_rating']}+";
+            }
+        }
 
-        return true;
-    }
-
-    public function meetsDivisionAgeGenderRequirements(string $division): bool
-    {
-        $age = $this->age();
-        $femaleDivisions = ['FPO', 'FA2', 'FA3', 'FA4', 'FP40', 'FJ18'];
-
-        if (in_array($division, $femaleDivisions, true) && $this->gender !== 'female') return false;
-        if ($division === 'MP40' && ($age === null || $age < 40)) return false;
-        if ($division === 'MP50' && ($age === null || $age < 50)) return false;
-        if ($division === 'MP60' && ($age === null || $age < 60)) return false;
-        if ($division === 'FP40' && ($age === null || $age < 40)) return false;
-        if (in_array($division, ['MJ18', 'FJ18'], true) && ($age === null || $age >= 18)) return false;
-        if ($division === 'MJ15' && ($age === null || $age >= 15)) return false;
-
-        return true;
+        return null;
     }
 
     public function isAdmin(): bool

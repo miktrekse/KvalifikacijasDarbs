@@ -26,16 +26,6 @@ class CompetitionController extends Controller
             ]])->all();
     }
 
-    private function userMeetsCustomDivision(User $user, array $rule, ?int $rating = null): bool
-    {
-        $age = $user->age();
-
-        return ($rule['gender'] === 'any' || $user->gender === $rule['gender'])
-            && ($rule['min_age'] === null || ($age !== null && $age >= $rule['min_age']))
-            && ($rule['max_age'] === null || ($age !== null && $age <= $rule['max_age']))
-            && ($rule['min_rating'] === null || ($rating !== null && $rating >= $rule['min_rating']));
-    }
-
     public function index(Request $request)
     {
         $filters = $request->validate([
@@ -220,13 +210,10 @@ class CompetitionController extends Controller
             return back()->withErrors(['division' => 'This competition is full.'])->withInput();
         }
 
-        if (!$request->user()->meetsDivisionRequirements($validated['division'])) {
-            return back()->withErrors(['division' => 'Your profile does not meet this division\'s age or gender requirements.'])->withInput();
-        }
-
-        $rule = ($competition->division_rules ?? [])[$validated['division']] ?? null;
-        if ($rule && !$this->userMeetsCustomDivision($request->user(), $rule, $officialRating)) {
-            return back()->withErrors(['division' => 'Your profile does not meet this custom division\'s requirements.'])->withInput();
+        // Gender, age and rating limits (no playing down into a lower-rated division)
+        $blocker = $request->user()->divisionBlocker($validated['division'], ($competition->division_rules ?? [])[$validated['division']] ?? null);
+        if ($blocker) {
+            return back()->withErrors(['division' => "You can't enter {$validated['division']}: {$blocker}."])->withInput();
         }
 
         CompetitionRegistration::updateOrCreate(

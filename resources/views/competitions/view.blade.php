@@ -5,21 +5,11 @@
 @section('content')
 @auth
 @php
-    $registrationDivisions = collect($competition->divisionsArray)->filter(function ($division) use ($competition) {
-        if (!Auth::user()->meetsDivisionAgeGenderRequirements($division)) {
-            return false;
-        }
-
-        $rule = ($competition->division_rules ?? [])[$division] ?? null;
-        if (!$rule) {
-            return true;
-        }
-
-        $age = Auth::user()->age();
-        return ($rule['gender'] === 'any' || $rule['gender'] === Auth::user()->gender)
-            && ($rule['min_age'] === null || ($age !== null && $age >= $rule['min_age']))
-            && ($rule['max_age'] === null || ($age !== null && $age <= $rule['max_age']));
-    })->values();
+    // Why each division is closed to this player (null = they can enter it)
+    $divisionBlockers = collect($competition->divisionsArray)->mapWithKeys(fn ($division) => [
+        $division => Auth::user()->divisionBlocker($division, ($competition->division_rules ?? [])[$division] ?? null),
+    ]);
+    $registrationDivisions = $divisionBlockers->filter(fn ($blocker) => $blocker === null)->keys();
 @endphp
 @endauth
 @php
@@ -296,7 +286,7 @@
                     @elseif($competition->max_participants && $competition->registrations->count() >= $competition->max_participants)
                         <p class="mb-3 text-sm text-red-600 text-center">Registration is full.</p>
                     @elseif($registrationDivisions->isEmpty())
-                        <p class="mb-3 text-sm text-gray-500 text-center">No divisions match your profile.</p>
+                        <p class="mb-3 text-sm text-gray-500 text-center">None of this event's divisions are open to you (gender, age or rating limits).</p>
                     @endif
                 @else
                     <a href="{{ route('login') }}" class="block w-full mb-3 text-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
@@ -349,13 +339,13 @@
                 <label for="registration-division" class="block text-sm font-medium text-gray-700">Division</label>
                 <select name="division" id="registration-division" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
                     <option value="">Select a division</option>
-                    @foreach($registrationDivisions as $division)
+                    @foreach($divisionBlockers as $division => $blocker)
                         @php $rule = ($competition->division_rules ?? [])[$division] ?? null; @endphp
-                        <option value="{{ $division }}" {{ old('division') === $division ? 'selected' : '' }}>{{ $division }}{{ $rule && $rule['gender'] !== 'any' ? ' · ' . ucfirst($rule['gender']) . ' only' : '' }}{{ $rule && ($rule['min_age'] !== null || $rule['max_age'] !== null) ? ' · age ' . ($rule['min_age'] ?? 0) . '-' . ($rule['max_age'] ?? 'up') : '' }}{{ $rule && $rule['min_rating'] !== null ? ' · rating ' . $rule['min_rating'] . '+' : '' }}</option>
+                        <option value="{{ $division }}" @selected(old('division') === $division) @disabled($blocker)>{{ $division }}{{ $rule && $rule['gender'] !== 'any' ? ' · ' . ucfirst($rule['gender']) . ' only' : '' }}{{ $rule && ($rule['min_age'] !== null || $rule['max_age'] !== null) ? ' · age ' . ($rule['min_age'] ?? 0) . '-' . ($rule['max_age'] ?? 'up') : '' }}{{ $rule && $rule['min_rating'] !== null ? ' · rating ' . $rule['min_rating'] . '+' : '' }}{{ isset(\App\Models\User::DIVISION_MAX_RATINGS[$division]) ? ' · max ' . \App\Models\User::DIVISION_MAX_RATINGS[$division] : '' }}{{ $blocker ? ' — ' . $blocker : '' }}</option>
                     @endforeach
                 </select>
                 @if($registrationDivisions->isEmpty())
-                    <p class="mt-2 text-sm text-red-600">No divisions match your age or gender profile.</p>
+                    <p class="mt-2 text-sm text-red-600">None of this event's divisions are open to you.</p>
                 @endif
                 @error('division')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>

@@ -188,9 +188,9 @@
                 <input type="hidden" name="divisions" value="">
                 <div class="ds-choices ds-choices--4">
                     @foreach([
-                        'MPO' => 'Open · recommended 930+', 'MA1' => 'Recommended 929-880', 'MA2' => 'Recommended 879-820',
-                        'MA3' => 'Recommended 819-750', 'MA4' => 'Recommended 749-0', 'FPO' => 'Women only · recommended 880+',
-                        'FA2' => 'Women only · recommended 879-820', 'FA3' => 'Women only · recommended 819-750', 'FA4' => 'Women only · recommended 749-0',
+                        'MPO' => 'Open · any rating', 'MA1' => 'Rated 929 or below', 'MA2' => 'Rated 879 or below',
+                        'MA3' => 'Rated 819 or below', 'MA4' => 'Rated 749 or below', 'FPO' => 'Women only · any rating',
+                        'FA2' => 'Women only · 879 or below', 'FA3' => 'Women only · 819 or below', 'FA4' => 'Women only · 749 or below',
                         'MP60' => 'Age 60+', 'MP50' => 'Age 50+', 'MP40' => 'Age 40+',
                         'FP40' => 'Women only · age 40+', 'MJ18' => 'Boys · under 18', 'MJ15' => 'Boys · under 15', 'FJ18' => 'Girls · under 18'
                     ] as $division => $threshold)
@@ -201,7 +201,7 @@
                         </label>
                     @endforeach
                 </div>
-                <p class="ds-field__hint">Ratings are recommendations only. Gender and age requirements still apply where shown.</p>
+                <p class="ds-field__hint">Amateur divisions are capped by rating: players can play up, but not down. Unrated players can enter any division.</p>
                 @error('divisions') <p class="ds-field__error">{{ $message }}</p> @enderror
             </div>
 
@@ -223,7 +223,7 @@
                             <select name="division_rules[{{ $index }}][gender]"><option value="any" {{ ($rule['gender'] ?? 'any') === 'any' ? 'selected' : '' }}>Any gender</option><option value="male" {{ ($rule['gender'] ?? '') === 'male' ? 'selected' : '' }}>Male only</option><option value="female" {{ ($rule['gender'] ?? '') === 'female' ? 'selected' : '' }}>Female only</option></select>
                             <input type="number" name="division_rules[{{ $index }}][min_age]" value="{{ $rule['min_age'] ?? '' }}" min="0" max="120" placeholder="Min age">
                             <input type="number" name="division_rules[{{ $index }}][max_age]" value="{{ $rule['max_age'] ?? '' }}" min="0" max="120" placeholder="Max age">
-                            <input type="number" name="division_rules[{{ $index }}][min_rating]" value="{{ $rule['min_rating'] ?? '' }}" min="0" max="1100" placeholder="Recommended rating">
+                            <input type="number" name="division_rules[{{ $index }}][min_rating]" value="{{ $rule['min_rating'] ?? '' }}" min="0" max="1100" placeholder="Min rating">
                             <button type="button" class="remove-division-rule" aria-label="Remove division">&times;</button>
                         </div>
                     @endforeach
@@ -316,7 +316,7 @@
         document.getElementById('add-division-rule').addEventListener('click', () => {
             const row = document.createElement('div');
             row.className = 'competition-division-rule';
-            row.innerHTML = `<input name="division_rules[${divisionRuleIndex}][name]" placeholder="Division name" maxlength="40" required><select name="division_rules[${divisionRuleIndex}][gender]"><option value="any">Any gender</option><option value="male">Male only</option><option value="female">Female only</option></select><input type="number" name="division_rules[${divisionRuleIndex}][min_age]" min="0" max="120" placeholder="Min age"><input type="number" name="division_rules[${divisionRuleIndex}][max_age]" min="0" max="120" placeholder="Max age"><input type="number" name="division_rules[${divisionRuleIndex}][min_rating]" min="0" max="1100" placeholder="Recommended rating"><button type="button" class="remove-division-rule" aria-label="Remove division">&times;</button>`;
+            row.innerHTML = `<input name="division_rules[${divisionRuleIndex}][name]" placeholder="Division name" maxlength="40" required><select name="division_rules[${divisionRuleIndex}][gender]"><option value="any">Any gender</option><option value="male">Male only</option><option value="female">Female only</option></select><input type="number" name="division_rules[${divisionRuleIndex}][min_age]" min="0" max="120" placeholder="Min age"><input type="number" name="division_rules[${divisionRuleIndex}][max_age]" min="0" max="120" placeholder="Max age"><input type="number" name="division_rules[${divisionRuleIndex}][min_rating]" min="0" max="1100" placeholder="Min rating"><button type="button" class="remove-division-rule" aria-label="Remove division">&times;</button>`;
             row.querySelector('.remove-division-rule').addEventListener('click', () => row.remove());
             divisionRules.appendChild(row);
             divisionRuleIndex++;
