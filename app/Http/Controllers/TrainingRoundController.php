@@ -151,6 +151,7 @@ class TrainingRoundController extends Controller
                 'division' => '',
                 'avatarUrl' => $player->avatar ? asset('storage/' . $player->avatar) : null,
                 'isMe' => $player->id === Auth::id(),
+                'profileUrl' => route('profile.show', $player),
             ])->values(),
             'holes' => $round->holes->map(fn (TrainingRoundHole $hole) => [
                 'id' => $hole->id,

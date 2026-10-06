@@ -23,6 +23,8 @@
                 'icon' => '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>'],
             ['url' => url('/competitions'), 'label' => 'Competitions', 'active' => request()->is('competitions*'),
                 'icon' => '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>'],
+            ['url' => route('players.index'), 'label' => 'Players', 'active' => request()->is('players*', 'profiles*'),
+                'icon' => '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'],
             ['url' => route('courses.index'), 'label' => 'Courses Map', 'active' => request()->is('courses*'),
                 'icon' => '<path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3zM9 3v15M15 6v15"/>'],
         ] : [
@@ -36,6 +38,8 @@
                 'icon' => '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>'],
             ['url' => route('training.index'), 'label' => 'Training Rounds', 'active' => request()->is('training*'),
                 'icon' => '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>'],
+            ['url' => route('players.index'), 'label' => 'Players', 'active' => request()->is('players*') || (request()->is('profiles*') && request()->route('user')?->isNot($user)),
+                'icon' => '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'],
             ['url' => route('courses.index'), 'label' => 'Courses Map', 'active' => request()->is('courses*'),
                 'icon' => '<path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3zM9 3v15M15 6v15"/>'],
         ];

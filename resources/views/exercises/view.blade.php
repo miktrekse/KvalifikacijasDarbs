@@ -131,7 +131,7 @@
                                 <div class="flex-1">
                                     <div class="flex items-center justify-between">
                                         <div>
-                                            <span class="font-medium text-gray-800">{{ $comment->user->name }}</span>
+                                            <a href="{{ route('profile.show', $comment->user) }}" class="ds-namelink font-medium text-gray-800">{{ $comment->user->name }}</a>
                                             <span class="text-xs text-gray-500 ml-2">{{ $comment->created_at->diffForHumans() }}</span>
                                         </div>
                                         @if(Auth::id() === $comment->user_id || Auth::id() === $exercise->user_id)
@@ -166,7 +166,7 @@
                         <span class="text-indigo-600 font-semibold">{{ substr($exercise->user->name, 0, 1) }}</span>
                     </div>
                     <div class="ml-3">
-                        <p class="text-sm font-medium text-gray-800">{{ $exercise->user->name }}</p>
+                        <a href="{{ route('profile.show', $exercise->user) }}" class="ds-namelink block text-sm font-medium text-gray-800">{{ $exercise->user->name }}</a>
                         <p class="text-xs text-gray-500">{{ $exercise->created_at->diffForHumans() }}</p>
                     </div>
                 </div>

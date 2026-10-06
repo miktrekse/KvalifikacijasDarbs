@@ -60,7 +60,14 @@
 
     <div class="mt-auto flex items-center justify-between gap-3 border-t border-dashed border-line pt-4">
         <span class="truncate text-xs text-gray-500">
-            {{ $isMine ? 'Your drill' : 'By ' . ($exercise->user->name ?? 'Unknown') }}@if($savedAt) · saved {{ $savedAt->diffForHumans() }}@endif
+            @if($isMine)
+                Your drill
+            @elseif($exercise->user)
+                By <a href="{{ route('profile.show', $exercise->user) }}" class="ds-namelink font-semibold text-gray-700">{{ $exercise->user->name }}</a>
+            @else
+                By Unknown
+            @endif
+            @if($savedAt) · saved {{ $savedAt->diffForHumans() }}@endif
         </span>
         <a href="{{ route('exercises.view', $exercise->id) }}" class="shrink-0 text-sm font-bold text-indigo-700 hover:text-indigo-900">Open drill →</a>
     </div>

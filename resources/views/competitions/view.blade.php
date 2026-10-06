@@ -314,7 +314,11 @@
                         <span class="text-lg font-semibold text-gray-600">{{ substr($competition->user->name ?? 'U', 0, 1) }}</span>
                     </div>
                     <div>
-                        <p class="font-semibold text-gray-800">{{ $competition->user->name ?? 'Unknown' }}</p>
+                        @if($competition->user)
+                            <a href="{{ route('profile.show', $competition->user) }}" class="ds-namelink font-semibold text-gray-800">{{ $competition->user->name }}</a>
+                        @else
+                            <p class="font-semibold text-gray-800">Unknown</p>
+                        @endif
                         <p class="text-sm text-gray-500">Organizer</p>
                     </div>
                 </div>

@@ -15,6 +15,8 @@ class ProfileController extends Controller
 {
     public function show(User $user)
     {
+        abort_if($user->isGuest(), 404);
+
         $user->load([
             'competitionRegistrations' => fn ($query) => $query->with('competition')->latest(),
             'roundRatings' => fn ($query) => $query->with(['competition', 'course']),

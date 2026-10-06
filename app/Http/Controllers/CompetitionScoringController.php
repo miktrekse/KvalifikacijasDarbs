@@ -48,6 +48,7 @@ class CompetitionScoringController extends Controller
                 'division' => $registration->division,
                 'avatarUrl' => $registration->user->avatar ? asset('storage/' . $registration->user->avatar) : null,
                 'isMe' => $registration->user_id === Auth::id(),
+                'profileUrl' => route('profile.show', $registration->user_id),
             ])->values(),
             'holes' => $holes->map(fn (CompetitionHole $hole) => [
                 'id' => $hole->id,

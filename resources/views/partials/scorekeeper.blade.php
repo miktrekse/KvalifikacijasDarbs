@@ -615,7 +615,7 @@
         const body = ranked.map(player => {
             const t = totals(player.id);
             return `<tr>
-                <td class="ds-sticky"><span class="flex items-center gap-2">${avatar(player, 'h-7 w-7')}<span class="max-w-[8rem] truncate">${esc(player.name)}</span></span></td>
+                <td class="ds-sticky"><span class="flex items-center gap-2">${avatar(player, 'h-7 w-7')}<a href="${player.profileUrl}" class="ds-namelink max-w-[8rem] truncate">${esc(player.name)}</a></span></td>
                 ${holes.map(h => {
                     const result = holeResult(h, player.id);
                     if (result.status === 'conflict') return '<td><span class="sc sc--conflict" title="Scores don&#39;t match">!</span></td>';
