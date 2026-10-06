@@ -3,125 +3,148 @@
 @section('title', 'Start Training Round')
 
 @section('content')
-<div class="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
-    <div class="max-w-full sm:max-w-3xl mx-auto">
-        <div class="mb-6">
-            <a href="{{ route('training.index') }}" class="text-blue-600 hover:text-blue-800 flex items-center">
-                <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                </svg>
-                Back to Training Rounds
-            </a>
+<div class="mx-auto max-w-4xl space-y-6">
+    <a href="{{ route('training.index') }}" class="ds-back">
+        <svg fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M15 19l-7-7 7-7"/></svg>
+        Training rounds
+    </a>
+
+    <section class="ds-hero ds-hero--form">
+        <p class="ds-eyebrow">New round</p>
+        <h1 class="mt-4">Tee up a<br><em>training round.</em></h1>
+        <p class="mt-3 max-w-lg text-sm sm:text-base">Pick a course, invite the players you're throwing with, then track every shot hole by hole.</p>
+        <nav class="ds-hero__steps mt-6" aria-label="Form sections">
+            <a href="#course"><b>1</b>Course</a>
+            <a href="#players"><b>2</b>Players</a>
+        </nav>
+    </section>
+
+    @if($errors->any())
+        <div class="ds-flash ds-flash--err mx-auto max-w-[56rem] !items-start" role="alert">
+            <span class="ds-flash__icon">!</span>
+            <ul class="space-y-0.5">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
         </div>
+    @endif
 
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <h1 class="text-2xl font-bold text-gray-800 mb-1">Start a Training Round</h1>
-            <p class="text-sm text-gray-500 mb-6">Pick a course, invite the players you're throwing with, then track every shot hole by hole.</p>
+    <form method="POST" action="{{ route('training.store') }}" class="ds-formstack">
+        @csrf
 
-            @if($errors->any())
-                <div class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
-                    <ul class="list-disc list-inside">
-                        @foreach($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
-                </div>
-            @endif
-
-            <form method="POST" action="{{ route('training.store') }}" class="space-y-6">
-                @csrf
-
-                <div class="border-b border-gray-200 pb-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Course</h3>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                        <div class="sm:col-span-2">
-                            <label for="course_name" class="block text-sm font-medium text-gray-700 mb-1">Course Name *</label>
-                            <input type="text" name="course_name" id="course_name" value="{{ old('course_name') }}" required
-                                class="w-full rounded-lg border-gray-300 border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="Mežaparks Disc Golf Course">
-                        </div>
-
-                        <input type="hidden" name="course_lat" id="course_lat" value="{{ old('course_lat') }}">
-                        <input type="hidden" name="course_lon" id="course_lon" value="{{ old('course_lon') }}">
-                        <input type="hidden" name="course_locality" id="course_locality" value="{{ old('course_locality') }}">
-                        <input type="hidden" name="holes_data" id="holes_data" value="{{ old('holes_data') }}">
-
-                        <div class="sm:col-span-2 competition-course-picker">
-                            <div class="competition-course-picker__heading">
-                                <div>
-                                    <span class="competition-course-picker__eyebrow">COURSE FINDER</span>
-                                    <h4>Choose a course from the map</h4>
-                                    <p id="training-course-status">Allow location access for nearby recommendations.</p>
-                                </div>
-                                <button type="button" id="training-near-me" class="competition-course-picker__nearby">Use my location</button>
-                            </div>
-                            <div class="competition-course-picker__tools">
-                                <input type="search" id="training-course-search" placeholder="Search course names" autocomplete="off">
-                                <input type="text" id="training-country-search" list="training-country-options" placeholder="Search country for farther courses" autocomplete="off">
-                                <datalist id="training-country-options">
-                                    <option data-code="GB" value="United Kingdom"></option>
-                                    <option data-code="US" value="United States"></option>
-                                    <option data-code="CA" value="Canada"></option>
-                                    <option data-code="LV" value="Latvia"></option>
-                                    <option data-code="DE" value="Germany"></option>
-                                    <option data-code="SE" value="Sweden"></option>
-                                    <option data-code="FI" value="Finland"></option>
-                                    <option data-code="AU" value="Australia"></option>
-                                    <option data-code="NZ" value="New Zealand"></option>
-                                    <option data-code="FR" value="France"></option>
-                                    <option data-code="ES" value="Spain"></option>
-                                    <option data-code="IT" value="Italy"></option>
-                                </datalist>
-                                <button type="button" id="training-country-load">Search country</button>
-                            </div>
-                            <div class="competition-course-picker__body">
-                                <div id="training-course-list" class="competition-course-picker__list">
-                                    <p>Nearby courses will appear here.</p>
-                                </div>
-                                <div id="training-course-map" class="competition-course-picker__map" aria-label="Choose a course on the map"></div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label for="holes_count" class="block text-sm font-medium text-gray-700 mb-1">Number of Holes *</label>
-                            <input type="number" name="holes_count" id="holes_count" min="1" max="36" required value="{{ old('holes_count', 18) }}"
-                                class="w-full rounded-lg border-gray-300 border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="mt-1 text-xs text-gray-500">Can't find basket details online? Every hole starts as a Par 3, 100m &mdash; you can still play it your way.</p>
-                        </div>
-
-                        <div class="sm:col-span-2 training-layout-picker" id="training-layout-picker" hidden></div>
-                    </div>
-                </div>
-
+        <section id="course" class="ds-section">
+            <div class="ds-section__head">
+                <span class="ds-section__num" style="--accent: #22a268">01</span>
                 <div>
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Who's playing?</h3>
+                    <h2 class="ds-section__title">Course</h2>
+                    <p class="ds-section__text">Verified layouts bring real par and distances for every hole.</p>
+                </div>
+            </div>
 
-                    <div class="flex flex-wrap items-center gap-2 mb-3" id="training-player-chips">
-                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-100 text-indigo-800 rounded-full text-sm font-medium">
-                            {{ Auth::user()->name }} <span class="text-xs text-indigo-500">(you)</span>
-                        </span>
-                    </div>
+            <input type="hidden" name="course_lat" id="course_lat" value="{{ old('course_lat') }}">
+            <input type="hidden" name="course_lon" id="course_lon" value="{{ old('course_lon') }}">
+            <input type="hidden" name="course_locality" id="course_locality" value="{{ old('course_locality') }}">
+            <input type="hidden" name="holes_data" id="holes_data" value="{{ old('holes_data') }}">
 
-                    <div class="relative">
-                        <input type="search" id="training-player-search" autocomplete="off" placeholder="Search players by name..."
-                            class="w-full rounded-lg border-gray-300 border px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <div id="training-player-results" class="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg hidden max-h-56 overflow-y-auto"></div>
+            <div class="ds-fieldgrid">
+                <div class="competition-course-picker is-wide">
+                    <div class="competition-course-picker__heading">
+                        <div>
+                            <span class="competition-course-picker__eyebrow">COURSE FINDER</span>
+                            <h4>Choose a course from the map</h4>
+                            <p id="training-course-status">Allow location access for nearby recommendations.</p>
+                        </div>
+                        <button type="button" id="training-near-me" class="competition-course-picker__nearby">
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="1.5"/></svg>
+                            Use my location
+                        </button>
                     </div>
-                    <p class="mt-1 text-xs text-gray-500">Optional &mdash; you can also log a solo round.</p>
+                    <div class="competition-course-picker__tools">
+                        <input type="search" id="training-course-search" placeholder="Search course names" autocomplete="off">
+                        <input type="text" id="training-country-search" list="training-country-options" placeholder="Search country for farther courses" autocomplete="off">
+                        <datalist id="training-country-options">
+                            <option data-code="GB" value="United Kingdom"></option>
+                            <option data-code="US" value="United States"></option>
+                            <option data-code="CA" value="Canada"></option>
+                            <option data-code="LV" value="Latvia"></option>
+                            <option data-code="DE" value="Germany"></option>
+                            <option data-code="SE" value="Sweden"></option>
+                            <option data-code="FI" value="Finland"></option>
+                            <option data-code="AU" value="Australia"></option>
+                            <option data-code="NZ" value="New Zealand"></option>
+                            <option data-code="FR" value="France"></option>
+                            <option data-code="ES" value="Spain"></option>
+                            <option data-code="IT" value="Italy"></option>
+                        </datalist>
+                        <button type="button" id="training-country-load">Search country</button>
+                    </div>
+                    <div class="competition-course-picker__body">
+                        <div id="training-course-list" class="competition-course-picker__list">
+                            <p>Nearby courses will appear here.</p>
+                        </div>
+                        <div id="training-course-map" class="competition-course-picker__map" aria-label="Choose a course on the map"></div>
+                    </div>
                 </div>
 
-                <div class="flex items-center justify-end pt-4">
-                    <a href="{{ route('training.index') }}" class="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition mr-3">
-                        Cancel
-                    </a>
-                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                        Start Round
-                    </button>
+                <div class="ds-field">
+                    <label for="course_name" class="ds-field__label">Course name <i>*</i></label>
+                    <input type="text" name="course_name" id="course_name" value="{{ old('course_name') }}" required
+                        class="ds-field__input @error('course_name') is-invalid @enderror" placeholder="Mežaparks Disc Golf Course">
                 </div>
-            </form>
+                <div class="ds-field">
+                    <label for="holes_count" class="ds-field__label">Holes <i>*</i></label>
+                    <input type="number" name="holes_count" id="holes_count" min="1" max="36" required value="{{ old('holes_count', 18) }}"
+                        class="ds-field__input @error('holes_count') is-invalid @enderror">
+                    <p class="ds-field__hint">No basket details online? Every hole starts as a Par 3, 100m.</p>
+                </div>
+
+                <div class="training-layout-picker is-wide" id="training-layout-picker" hidden></div>
+            </div>
+        </section>
+
+        <section id="players" class="ds-section">
+            <div class="ds-section__head">
+                <span class="ds-section__num" style="--accent: #f26b3a">02</span>
+                <div>
+                    <h2 class="ds-section__title">Who's playing?</h2>
+                    <p class="ds-section__text">Optional &mdash; you can also log a solo round.</p>
+                </div>
+            </div>
+
+            <div class="mb-3 flex flex-wrap items-center gap-2" id="training-player-chips">
+                <span class="ds-invite is-you">
+                    <span class="ds-avatar">
+                        @if(Auth::user()->avatar)
+                            <img src="{{ asset('storage/' . Auth::user()->avatar) }}" alt="">
+                        @else
+                            <span>{{ strtoupper(substr(Auth::user()->name, 0, 1)) }}</span>
+                        @endif
+                    </span>
+                    {{ Auth::user()->name }} <small>(you)</small>
+                </span>
+            </div>
+
+            <div class="relative">
+                <div class="ds-filters__search">
+                    <svg class="h-4 w-4 shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                    <input type="search" id="training-player-search" autocomplete="off" placeholder="Search players by name…" aria-label="Search players">
+                </div>
+                <div id="training-player-results" class="ds-results hidden"></div>
+            </div>
+        </section>
+
+        <div class="ds-formbar">
+            <p class="ds-formbar__note">Fields marked <span class="font-bold text-flight">*</span> are required.</p>
+            <div class="ds-formbar__actions">
+                <a href="{{ route('training.index') }}" class="ds-btn ds-btn--line">Cancel</a>
+                <button type="submit" class="ds-btn ds-btn--flight">
+                    Start round
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                </button>
+            </div>
         </div>
-    </div>
+    </form>
 </div>
 @endsection
 
@@ -276,13 +299,17 @@
         const selectedPlayers = new Map();
         let searchTimeout = null;
 
+        function avatarHtml(player) {
+            return `<span class="ds-avatar">${player.avatar_url ? `<img src="${escapeHtml(player.avatar_url)}" alt="">` : `<span>${escapeHtml(player.name.charAt(0).toUpperCase())}</span>`}</span>`;
+        }
+
         function renderChips() {
             [...playerChips.querySelectorAll('[data-player-chip]')].forEach(chip => chip.remove());
             selectedPlayers.forEach((player, id) => {
                 const chip = document.createElement('span');
                 chip.dataset.playerChip = id;
-                chip.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-800 rounded-full text-sm font-medium';
-                chip.innerHTML = `${escapeHtml(player.name)} <button type="button" class="text-gray-400 hover:text-red-600 leading-none" aria-label="Remove">&times;</button><input type="hidden" name="player_ids[]" value="${id}">`;
+                chip.className = 'ds-invite';
+                chip.innerHTML = `${avatarHtml(player)} ${escapeHtml(player.name)} <button type="button" aria-label="Remove">&times;</button><input type="hidden" name="player_ids[]" value="${id}">`;
                 chip.querySelector('button').addEventListener('click', () => {
                     selectedPlayers.delete(id);
                     renderChips();
@@ -301,8 +328,7 @@
                 if (selectedPlayers.has(player.id)) return;
                 const row = document.createElement('button');
                 row.type = 'button';
-                row.className = 'flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 text-sm';
-                row.innerHTML = `${player.avatar_url ? `<img src="${player.avatar_url}" class="h-6 w-6 rounded-full object-cover">` : `<span class="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">${escapeHtml(player.name.charAt(0).toUpperCase())}</span>`} ${escapeHtml(player.name)}`;
+                row.innerHTML = `${avatarHtml(player)} ${escapeHtml(player.name)}`;
                 row.addEventListener('click', () => {
                     selectedPlayers.set(player.id, player);
                     renderChips();
