@@ -62,6 +62,8 @@ Route::middleware(['auth', 'readonly.guest'])->group(function () {
     Route::post('/competitions/{id}/holes/{hole}/shots/undo', [CompetitionScoringController::class, 'undoShot'])->name('competitions.shots.undo');
     Route::post('/competitions/{id}/holes/{hole}/score', [CompetitionScoringController::class, 'setScore'])->name('competitions.shots.score');
     Route::post('/competitions/{id}/holes/{hole}/accept', [CompetitionScoringController::class, 'acceptScore'])->name('competitions.shots.accept');
+    Route::get('/competitions/{id}/scorecard/edit', [CompetitionScoringController::class, 'editScorecard'])->name('competitions.scorecard.edit');
+    Route::put('/competitions/{id}/scorecard', [CompetitionScoringController::class, 'updateScorecard'])->name('competitions.scorecard.update');
 
     Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
     Route::get('/courses/data', [CourseController::class, 'data'])->name('courses.data');
@@ -73,6 +75,8 @@ Route::middleware(['auth', 'readonly.guest'])->group(function () {
     Route::get('/training/players/search', [TrainingRoundController::class, 'searchPlayers'])->name('training.players.search');
     Route::get('/training/{round}', [TrainingRoundController::class, 'show'])->name('training.show');
     Route::get('/training/{round}/data', [TrainingRoundController::class, 'data'])->name('training.data');
+    Route::get('/training/{round}/edit', [TrainingRoundController::class, 'edit'])->name('training.edit');
+    Route::put('/training/{round}', [TrainingRoundController::class, 'update'])->name('training.update');
     Route::post('/training/{round}/complete', [TrainingRoundController::class, 'complete'])->name('training.complete');
     Route::delete('/training/{round}', [TrainingRoundController::class, 'destroy'])->name('training.destroy');
     Route::post('/training/{round}/holes/{hole}/shots', [TrainingRoundController::class, 'addShot'])->name('training.shots.store');

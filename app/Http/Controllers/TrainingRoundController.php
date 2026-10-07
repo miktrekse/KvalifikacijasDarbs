@@ -305,6 +305,71 @@ class TrainingRoundController extends Controller
         ]);
     }
 
+    /** Scorecard editor: course, par and every player's score per hole, open to anyone who played. */
+    public function edit(TrainingRound $round)
+    {
+        $this->abortUnlessParticipant($round);
+        $round->load(['players', 'holes.shots']);
+
+        return view('training.edit', [
+            'round' => $round,
+            'players' => $round->players->map(fn (User $player) => ['id' => $player->id, 'name' => $player->name])->values(),
+            'scores' => $round->holes->mapWithKeys(fn (TrainingRoundHole $hole) => [
+                $hole->id => $round->players->mapWithKeys(fn (User $player) => [$player->id => $round->holeScore($hole, $player->id)])->all(),
+            ])->all(),
+        ]);
+    }
+
+    public function update(Request $request, TrainingRound $round)
+    {
+        $this->abortUnlessParticipant($round);
+        $round->load(['players', 'holes.shots']);
+
+        $validated = $request->validate([
+            'course_name' => 'required|string|max:255',
+            'holes' => 'required|array',
+            'holes.*.par' => 'required|integer|min:1|max:10',
+            'holes.*.distance_m' => 'nullable|integer|min:1|max:2000',
+            'scores' => 'nullable|array',
+            'scores.*' => 'array',
+            'scores.*.*' => 'nullable|integer|min:1|max:' . TrainingRoundShot::MAX_HOLE_SCORE,
+        ]);
+
+        DB::transaction(function () use ($round, $validated) {
+            $round->update(['course_name' => $validated['course_name']]);
+
+            foreach ($round->holes as $hole) {
+                $hole->update([
+                    'par' => $validated['holes'][$hole->id]['par'] ?? $hole->par,
+                    'distance_m' => $validated['holes'][$hole->id]['distance_m'] ?? $hole->distance_m,
+                ]);
+
+                foreach ($round->players as $player) {
+                    $strokes = $validated['scores'][$hole->id][$player->id] ?? null;
+                    $strokes = $strokes === null ? null : (int) $strokes;
+
+                    // Untouched holes keep their shot-by-shot log (and the stats that come from it)
+                    if ($strokes === $round->holeScore($hole, $player->id)) {
+                        continue;
+                    }
+
+                    $hole->shots()->where('user_id', $player->id)->delete();
+                    if ($strokes) {
+                        $hole->shots()->create([
+                            'user_id' => $player->id,
+                            'shot_number' => 1,
+                            'result' => 'in_basket',
+                            'strokes' => $strokes,
+                            'score_only' => true,
+                        ]);
+                    }
+                }
+            }
+        });
+
+        return redirect()->route('training.show', $round->id)->with('success', 'Round updated.');
+    }
+
     /**
      * Deletes the round from your list. Anyone else who played it keeps it until
      * they delete it too; once nobody has it left, it is gone for good.

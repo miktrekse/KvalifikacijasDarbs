@@ -242,6 +242,14 @@ class Competition extends Model
         return true;
     }
 
+    /** Fixing the official scores is left to admins and the tournament director (whoever created it). */
+    public function canEditScores(User $user): bool
+    {
+        return ($user->isAdmin() || (int) $this->user_id === $user->id)
+            && $this->hasGroups()
+            && $this->status !== 'cancelled';
+    }
+
     public function canApprove(User $user): bool
     {
         return $user->isAdmin();

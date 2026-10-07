@@ -2,6 +2,7 @@
     $myRegistration = Auth::check() ? $competition->registrations->firstWhere('user_id', Auth::id()) : null;
     $myGroup = $myRegistration?->group;
     $isAdmin = Auth::check() && Auth::user()->isAdmin();
+    $canEditScores = Auth::check() && $competition->canEditScores(Auth::user());
     $hasScores = $leaderboard->contains(fn ($row) => $row['thru'] > 0);
 @endphp
 
@@ -22,12 +23,17 @@
                 @endif
             </h2>
         </div>
-        @if($competition->hasGroups() && ($myGroup || $isAdmin))
-            <a href="{{ route('competitions.score', $competition->id) }}" class="ds-btn {{ $competition->scoringIsOpen() ? 'ds-btn--flight' : 'ds-btn--line' }} shrink-0">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-                {{ $competition->scoringIsOpen() ? 'Keep score' : ($competition->isClosed() ? 'Scorecard' : 'Your card') }}
-            </a>
-        @endif
+        <div class="flex flex-wrap items-center gap-2">
+            @if($canEditScores)
+                <a href="{{ route('competitions.scorecard.edit', $competition->id) }}" class="ds-btn ds-btn--line shrink-0">Edit scores</a>
+            @endif
+            @if($competition->hasGroups() && ($myGroup || $isAdmin))
+                <a href="{{ route('competitions.score', $competition->id) }}" class="ds-btn {{ $competition->scoringIsOpen() ? 'ds-btn--flight' : 'ds-btn--line' }} shrink-0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                    {{ $competition->scoringIsOpen() ? 'Keep score' : ($competition->isClosed() ? 'Scorecard' : 'Your card') }}
+                </a>
+            @endif
+        </div>
     </div>
 
     <div class="ds-card__body space-y-6">

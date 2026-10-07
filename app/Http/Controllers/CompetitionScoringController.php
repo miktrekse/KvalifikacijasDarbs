@@ -8,6 +8,7 @@ use App\Models\CompetitionHole;
 use App\Models\CompetitionShot;
 use App\Models\TrainingRoundShot;
 use App\Support\CardScores;
+use App\Support\RatingEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -231,6 +232,106 @@ class CompetitionScoringController extends Controller
             'finished' => $finished,
             'shots' => $shots->map(fn (CompetitionShot $shot) => $this->shotPayload($shot))->values(),
         ]);
+    }
+
+    /** Official scorecard editor for every card at once (admins and the tournament director). */
+    public function editScorecard($id)
+    {
+        $competition = Competition::findOrFail($id);
+        abort_unless($competition->canEditScores(Auth::user()), 403);
+
+        $registrations = $this->cardRegistrations($competition);
+        $holes = $competition->courseHoles()->with('shots')->get();
+
+        return view('competitions.scorecard-edit', [
+            'competition' => $competition,
+            'holes' => $holes,
+            'players' => $registrations->map(fn ($registration) => [
+                'id' => $registration->user_id,
+                'name' => $registration->user->name,
+                'label' => 'Card ' . $registration->group->number . ' · ' . $registration->division,
+            ])->values(),
+            'scores' => $holes->mapWithKeys(fn (CompetitionHole $hole) => [
+                $hole->id => $registrations->mapWithKeys(fn ($registration) => [
+                    $registration->user_id => CardScores::resolve($hole->shots->where('user_id', $registration->user_id))['strokes'],
+                ])->all(),
+            ])->all(),
+        ]);
+    }
+
+    /**
+     * Saves the editor. A hole whose official score changed is replaced by a single
+     * score-only entry from the editor, wiping every scorer's copy (and any conflict).
+     */
+    public function updateScorecard(Request $request, $id)
+    {
+        $competition = Competition::findOrFail($id);
+        abort_unless($competition->canEditScores(Auth::user()), 403);
+
+        $validated = $request->validate([
+            'holes' => 'required|array',
+            'holes.*.par' => 'required|integer|min:1|max:10',
+            'holes.*.distance_m' => 'nullable|integer|min:1|max:2000',
+            'scores' => 'nullable|array',
+            'scores.*' => 'array',
+            'scores.*.*' => 'nullable|integer|min:1|max:' . TrainingRoundShot::MAX_HOLE_SCORE,
+        ]);
+
+        $playerIds = $this->cardRegistrations($competition)->pluck('user_id');
+        $holes = $competition->courseHoles()->with('shots')->get();
+
+        DB::transaction(function () use ($holes, $playerIds, $validated) {
+            foreach ($holes as $hole) {
+                $hole->update([
+                    'par' => $validated['holes'][$hole->id]['par'] ?? $hole->par,
+                    'distance_m' => $validated['holes'][$hole->id]['distance_m'] ?? null,
+                ]);
+
+                foreach ($playerIds as $userId) {
+                    $strokes = $validated['scores'][$hole->id][$userId] ?? null;
+                    $strokes = $strokes === null ? null : (int) $strokes;
+                    $resolved = CardScores::resolve($hole->shots->where('user_id', $userId));
+
+                    // Unchanged holes keep every scorer's copy; a blank box leaves an open or disputed hole alone
+                    if ($strokes === $resolved['strokes'] || ($strokes === null && $resolved['status'] === CardScores::CONFLICT)) {
+                        continue;
+                    }
+
+                    $hole->shots()->where('user_id', $userId)->delete();
+                    if ($strokes) {
+                        $hole->shots()->create([
+                            'user_id' => $userId,
+                            'recorded_by' => Auth::id(),
+                            'shot_number' => 1,
+                            'result' => 'in_basket',
+                            'strokes' => $strokes,
+                            'score_only' => true,
+                        ]);
+                    }
+                }
+            }
+        });
+
+        // A finished tournament's scores feed round, course and player ratings
+        if ($competition->status === 'completed') {
+            app(RatingEngine::class)->recalculate();
+            $competition->registrations()->with('user')->get()->each(fn ($registration) => $registration->user?->syncVerification());
+        } else {
+            $competition->finishIfComplete();
+        }
+
+        return redirect()->route('competitions.view', $competition->id)->with('success', 'Scores updated.');
+    }
+
+    /** Everyone on a card, in card order. */
+    private function cardRegistrations(Competition $competition)
+    {
+        return $competition->registrations()
+            ->whereNotNull('competition_group_id')
+            ->with(['user', 'group'])
+            ->get()
+            ->sortBy(fn ($registration) => [$registration->group->number, $registration->user->name])
+            ->values();
     }
 
     /** The current scorer's own copy of a player's hole. */
