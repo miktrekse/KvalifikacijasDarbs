@@ -18,6 +18,10 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            'role' => 'user',
+            // Filled in so division gender and age rules can be checked
+            'gender' => 'male',
+            'date_of_birth' => '1990-05-15',
         ];
     }
 
@@ -26,5 +30,21 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
         ]);
+    }
+
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => ['role' => 'admin']);
+    }
+
+    /** A DiscStats "verified" player (enough completed tournaments), not a verified email. */
+    public function verifiedPlayer(): static
+    {
+        return $this->state(fn (array $attributes) => ['role' => 'verified']);
+    }
+
+    public function guest(): static
+    {
+        return $this->state(fn (array $attributes) => ['role' => 'guest']);
     }
 }

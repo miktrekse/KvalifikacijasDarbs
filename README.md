@@ -1,59 +1,151 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# DiscStats
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+DiscStats ir disku golfa tīmekļa lietotne spēlētājiem un sacensību organizatoriem:
 
-## About Laravel
+- **Treniņu raundi** — spēlētājs izvēlas trasi kartē (OpenStreetMap), uzaicina draugus un vairāki telefoni vienlaikus ved rezultātu metienu pa metienam vai ar vienu skaitli bedrītei.
+- **Sacensības** — organizators izveido turnīru ar divīzijām un dalībnieku limitu, spēlētāji piesakās, 30 minūtes pirms starta sistēma izlozē grupas (kartītes) un shotgun starta bedrītes, raunda laikā katrs grupas loceklis ved rezultātus un tiek parādīts live rezultātu saraksts.
+- **Reitingi** — pēc turnīra tiek aprēķināts katra raunda reitings, trases (layout) reitings un spēlētāja reitings (PDGA / Disc Golf Metrix stilā, sk. `app/Support/RatingEngine.php`).
+- **Trašu karte** — disku golfa trases no OpenStreetMap, nosaukumi papildināti no Disc Golf Metrix un apkārtnes, rokām pārbaudīti layouti Latvijas trasēm (`app/Support/CuratedCourses.php`).
+- **Vingrinājumu bibliotēka** — publiski un privāti treniņu vingrinājumi ar komentāriem un saglabāšanu.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Prasības
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+| Rīks | Versija |
+| --- | --- |
+| PHP | 8.2+ ar paplašinājumiem `pdo_mysql`, `mbstring`, `fileinfo`, `openssl` (testiem arī `pdo_sqlite`) |
+| Composer | 2.x |
+| Node.js | 20.19+ vai 22.12+ (Vite 7) |
+| Datubāze | MySQL 8 vai MariaDB 10.6+ (Laragon noklusējuma MySQL der) |
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Mērķa datubāze ir **MySQL**. Automātiskie testi izmanto SQLite atmiņā (`phpunit.xml`), tāpēc migrācijas ir rakstītas tā, lai darbotos abās.
 
-## Learning Laravel
+## Instalācija
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+1. Izveido tukšu datubāzi, piemēram `discstats`.
+2. Klonē repozitoriju un palaid:
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+   ```bash
+   composer setup
+   ```
 
-## Laravel Sponsors
+   Tas izdara visu pēc kārtas: `composer install`, nokopē `.env.example` uz `.env` (ja `.env` vēl nav), ģenerē `APP_KEY`, palaiž migrācijas, palaiž seederus (`db:seed`), izveido `public/storage` saiti avatariem (`storage:link`), `npm install` un `npm run build`.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+   Pirms tam `.env` failā jāieraksta datubāzes piekļuve (`DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`). Ja `.env` vēl nav, vari vispirms palaist `copy .env.example .env` (Windows) vai `cp .env.example .env`.
 
-### Premium Partners
+Ja gribi soļus darīt pa vienam:
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+```bash
+composer install
+cp .env.example .env          # Windows: copy .env.example .env
+php artisan key:generate
+php artisan migrate
+php artisan db:seed
+php artisan storage:link
+npm install
+npm run build
+```
 
-## Contributing
+### Ko izveido seederi
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+`php artisan db:seed` drīkst palaist atkārtoti — jau esoši dati netiek dublēti vai pārrakstīti.
 
-## Code of Conduct
+| Seederis | Ko izveido |
+| --- | --- |
+| `AdminUserSeeder` | Pirmo administratoru no `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` (`.env`). Ja `ADMIN_PASSWORD` ir tukšs, tiek ģenerēta nejauša parole un **vienreiz** izdrukāta konsolē. Ja administrators jau eksistē, nekas netiek mainīts. |
+| `GuestUserSeeder` | Koplietoto tikai lasāmo kontu pogai "Continue as guest". |
+| `CategorySeeder`, `ExerciseSeeder` | Vingrinājumu kategorijas un sākuma vingrinājumu bibliotēku. |
+| `DemoUserSeeder` | **Tikai ne-production vidē:** testa kontus `verified@discstats.com` / `verified123` un `player@discstats.com` / `player123`. Production vidē (`APP_ENV=production`) tie netiek veidoti. |
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Pēc pirmās ielogošanās administratoram ieteicams nomainīt ģenerēto paroli.
 
-## Security Vulnerabilities
+## Palaišana
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Izstrādes režīmā viss vajadzīgais startē ar vienu komandu:
 
-## License
+```bash
+composer dev
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Tā palaiž `php artisan serve`, queue worker, **scheduler** (`schedule:work`), logu skatītāju un Vite.
+
+### Scheduler ir obligāts
+
+Sacensību dzīves cikls un trašu kartes atjaunošana notiek fonā:
+
+| Komanda | Kad | Ko dara |
+| --- | --- | --- |
+| `competitions:sync` | katru minūti | 30 min pirms starta izlozē grupas un izveido bedrītes, starta brīdī atzīmē sacensības kā "live" |
+| `courses:warm` | katru dienu 04:30 | iepriekš ielādē trašu karti no OpenStreetMap un atrod nosaukumus nenosauktajām trasēm |
+
+Production serverī schedulerim vajag vienu cron ierakstu:
+
+```
+* * * * * cd /ceļš/uz/discstats && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Windows serverī to pašu dara Task Scheduler uzdevums, kas katru minūti izpilda `php artisan schedule:run`.
+
+### Noderīgas komandas
+
+```bash
+php artisan competitions:sync        # sacensību dzīves cikls uzreiz (to pašu dara scheduler)
+php artisan ratings:recalculate      # pārrēķina visus reitingus no pabeigtajiem turnīriem
+php artisan courses:warm LV,EE       # ielādē trašu karti norādītajām valstīm
+php artisan courses:name LV          # atrod nosaukumus nenosauktajām trasēm
+```
+
+## Lomas
+
+| Loma | Ko drīkst |
+| --- | --- |
+| `guest` | Viens koplietots konts pogai "Continue as guest": var tikai skatīties, neko nevar saglabāt. |
+| `user` | Jauns reģistrēts spēlētājs: treniņi, pieteikšanās sacensībām, privāti vingrinājumi. |
+| `verified` | Spēlētājs ar pietiekamu sacensību pieredzi: var arī veidot sacensības (tās apstiprina admins) un publicēt vingrinājumus. |
+| `admin` | Visu pārvalda: apstiprina sacensības, labo rezultātus, pārvalda lietotājus un saturu. |
+
+**Svarīgi:** loma `verified` DiscStats nozīmē *spēlētāja sacensību pieredzi*, **nevis** apstiprinātu e-pastu. Laravel kolonna `users.email_verified_at` ar šo lomu nav saistīta, un e-pasta verifikācija lietotnē netiek izmantota.
+
+Pirmās sacensības svaigā sistēmā izveido administrators (vai demo konts `verified@discstats.com` lokālajā vidē), jo parasts lietotājs par `verified` kļūst tikai pēc sacensībām.
+
+## Testi
+
+Testi izmanto SQLite datubāzi atmiņā, tāpēc PHP vajag `pdo_sqlite` paplašinājumu. Laragon to ieslēdz `php.ini` failā, noņemot semikolu rindas sākumā:
+
+```ini
+extension=pdo_sqlite
+```
+
+Tad:
+
+```bash
+php artisan test
+```
+
+Ja paplašinājumu nevar ieslēgt pastāvīgi, testus var palaist arī tā:
+
+```bash
+php -d extension=pdo_sqlite vendor/phpunit/phpunit/phpunit
+```
+
+## Ārējie servisi
+
+Trašu kartei tiek izmantoti publiski, bezmaksas servisi. Atbildes tiek kešotas, lai tos nenoslogotu:
+
+- **OpenStreetMap Overpass API** — trašu atrašanās vietas un bedrīšu dati;
+- **Disc Golf Metrix** (`api.php?content=courses_list`) — trašu nosaukumi nenosauktajām OSM trasēm;
+- **Nominatim** — tuvākās apdzīvotās vietas nosaukums, ja citur nosaukumu atrast neizdodas.
+
+Ja šie servisi nav pieejami, karte rāda pēdējos kešotos datus vai rokām pārbaudītās trases.
+
+## Projekta struktūra
+
+| Vieta | Saturs |
+| --- | --- |
+| `app/Http/Controllers` | Lapas un API (sacensības, scoring, treniņi, trases, vingrinājumi, admins) |
+| `app/Models` | Eloquent modeļi un biznesa noteikumi (piem., `Competition::syncLifecycle`) |
+| `app/Support/RatingEngine.php` | Raundu, trašu un spēlētāju reitingi |
+| `app/Support/CompetitionGrouping.php` | Grupu izloze un sacensību bedrītes |
+| `app/Support/CourseNamer.php` | Trašu filtrēšana un nosaukumu atrašana |
+| `routes/console.php` | Artisan komandas un scheduler |
+| `resources/views/partials/scorekeeper.blade.php` | Rezultātu ievades lietotne (kopīga treniņiem un sacensībām) |
+| `tests/` | Feature un Unit testi |
