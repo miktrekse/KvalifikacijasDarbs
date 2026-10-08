@@ -98,6 +98,15 @@
         return course.locality || course.region_code || course.country_code || 'Location unavailable';
     }
 
+    // Courses left unnamed on OpenStreetMap get a name from elsewhere; say where it came from
+    const nameSourceNotes = {
+        metrix: 'Name from Disc Golf Metrix',
+        osm_area: 'Name from the surrounding course area',
+        park: 'Named after the park it is in',
+        operator: 'Named after the course operator',
+        locality: 'Named after the nearest town',
+    };
+
     function renderCourses() {
         const query = searchInput.value.trim().toLowerCase();
         const visibleCourses = courseItems.filter(course =>
@@ -157,9 +166,10 @@
         const googleLink = `<a class="course-popup__google-link" href="${googleMapsUrl}" target="_blank" rel="noopener">Check Google Maps reviews <span>↗</span></a>`;
         const parStat = course.par ? `<span><b>${escapeHtml(course.par)}</b><small>PAR</small></span>` : '';
         const verifiedBadge = course.curated ? '<span class="course-popup__verified">✓ Verified stats</span>' : '';
+        const nameNote = nameSourceNotes[course.name_source] ? `<span class="course-popup__name-note">${nameSourceNotes[course.name_source]}</span>` : '';
         const holesSection = layoutsSection(course);
 
-        return `<div class="course-popup__body"><span class="course-popup__eyebrow">DISC GOLF COURSE</span><strong class="course-popup__title">${escapeHtml(course.name)}</strong><span class="course-popup__location">${escapeHtml(location)}</span>${verifiedBadge}${address}${phone}<div class="course-popup__stats"><span><b>${holes}</b><small>LAYOUT</small></span>${parStat}<span><b>${escapeHtml(course.country_code)}</b><small>REGION</small></span></div>${details ? `<div class="course-popup__details">${details}</div>` : ''}${holesSection}<div class="course-popup__actions">${googleLink}${website}${osmLink}</div></div>`;
+        return `<div class="course-popup__body"><span class="course-popup__eyebrow">DISC GOLF COURSE</span><strong class="course-popup__title">${escapeHtml(course.name)}</strong>${nameNote}<span class="course-popup__location">${escapeHtml(location)}</span>${verifiedBadge}${address}${phone}<div class="course-popup__stats"><span><b>${holes}</b><small>LAYOUT</small></span>${parStat}<span><b>${escapeHtml(course.country_code)}</b><small>REGION</small></span></div>${details ? `<div class="course-popup__details">${details}</div>` : ''}${holesSection}<div class="course-popup__actions">${googleLink}${website}${osmLink}</div></div>`;
     }
 
     function layoutsSection(course) {

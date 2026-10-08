@@ -61,6 +61,21 @@ Artisan::command('courses:warm {countries=all : Comma-separated country codes, o
     foreach ($pending as $country) {
         $this->warn("{$country}: OpenStreetMap busy, kept the previous cache");
     }
+
+    $this->call('courses:name', ['countries' => $countries]);
 })->purpose('Pre-load course map data from OpenStreetMap');
+
+Artisan::command('courses:name {countries=all : Comma-separated country codes, or "all"}', function (string $countries) {
+    // Unnamed OpenStreetMap courses get a name from Disc Golf Metrix, or the park or town they lie in.
+    // Lookups are cached for months, so only newly mapped courses cost any requests after the first run.
+    $list = strtolower($countries) === 'all'
+        ? array_keys(CourseController::COUNTRY_BOXES)
+        : array_filter(array_map('trim', explode(',', strtoupper($countries))));
+
+    foreach ($list as $country) {
+        $named = app(CourseController::class)->name($country);
+        $this->info("{$country}: {$named} unnamed courses named");
+    }
+})->purpose('Find names for courses that are unnamed on OpenStreetMap');
 
 Schedule::command('courses:warm')->dailyAt('04:30');

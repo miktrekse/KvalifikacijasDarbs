@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CourseNamer;
 use App\Support\CuratedCourses;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\ConnectionException;
@@ -91,6 +92,22 @@ class CourseController extends Controller
         return $response->getStatusCode() === 200 && ($response->getData(true)['source'] ?? null) === 'OpenStreetMap'
             ? (int) $response->getData(true)['total']
             : null;
+    }
+
+    /**
+     * Looks up names for a country's unnamed courses (Disc Golf Metrix, then the park or
+     * town they lie in) and caches them for map requests. Returns how many were named.
+     */
+    public function name(string $country): int
+    {
+        $this->budgetSeconds = 120;
+        $this->refresh = true;
+
+        return app(CourseNamer::class)->resolve(
+            $country,
+            $this->cachedCountryElements([$country]),
+            fn (string $query) => $this->runOverpassQuery(['area' => $query]),
+        );
     }
 
     public function index()
@@ -193,7 +210,7 @@ class CourseController extends Controller
                 ], 503);
             }
 
-            $courses = $elements
+            $courses = app(CourseNamer::class)->prepare($elements)
                 ->map(function (array $element) use ($country, $isNearbySearch) {
                     $tags = $element['tags'] ?? [];
                     $coordinates = isset($element['lat'], $element['lon'])
@@ -203,10 +220,11 @@ class CourseController extends Controller
                     return [
                         'id' => $element['id'] ?? null,
                         'osm_type' => $element['type'] ?? 'node',
-                        'name' => $tags['name'] ?? 'Unnamed disc golf course',
+                        'name' => $tags['name'] ?? CourseNamer::FALLBACK_NAME,
+                        'name_source' => $element['name_source'] ?? null,
                         'lat' => $coordinates[0],
                         'lon' => $coordinates[1],
-                        'locality' => $tags['addr:city'] ?? $tags['addr:town'] ?? null,
+                        'locality' => $tags['addr:city'] ?? $tags['addr:town'] ?? $element['derived_locality'] ?? null,
                         'address' => collect([
                             trim(($tags['addr:housenumber'] ?? '') . ' ' . ($tags['addr:street'] ?? '')),
                             $tags['addr:postcode'] ?? null,
@@ -363,6 +381,10 @@ class CourseController extends Controller
         }
 
         $elements = $this->runOverpassQuery($queries);
+        // A busy server can answer a country query with nothing at all; don't let that wipe out a good list
+        if ($elements === [] && str_starts_with($key, 'overpass:country:') && !empty(Cache::get($key . ':stale'))) {
+            $elements = null;
+        }
         if ($elements !== null) {
             Cache::put($key, $elements, $ttl);
             Cache::put($key . ':stale', $elements, now()->addDays(90));

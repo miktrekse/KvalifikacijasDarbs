@@ -963,6 +963,7 @@
     .course-popup__eyebrow { display: block; color: var(--orange); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.12em; }
     .course-popup__title { display: block; margin-top: 0.3rem; font-size: 1.05rem; line-height: 1.15; }
     .course-popup__location { display: block; margin-top: 0.3rem; color: var(--muted); font-size: 0.75rem; }
+    .course-popup__name-note { display: block; margin-top: 0.2rem; color: var(--muted); font-size: 0.62rem; font-style: italic; }
     .course-popup__verified { display: inline-block; margin-top: 0.4rem; padding: 0.15rem 0.5rem; border-radius: 999px; background: #e9f5ef; color: #1c7a4f; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.03em; }
     .course-popup__address, .course-popup__phone { display: block; margin-top: 0.35rem; color: var(--muted); font-size: 0.7rem; line-height: 1.3; }
     .course-popup__phone { color: var(--teal); text-decoration: none; }
