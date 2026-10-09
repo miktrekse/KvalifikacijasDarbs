@@ -29,6 +29,50 @@ class ExerciseController extends Controller
         'long' => ['label' => '26+ min', 'range' => [26, null]],
     ];
 
+    /** Upper bounds keep requests inside what the TEXT/VARCHAR columns can hold. */
+    public const MAX_TAGS = 15;
+
+    public const MAX_TAG_LENGTH = 30;
+
+    /** Shared by create and edit. */
+    private function exerciseRules(): array
+    {
+        return [
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string|max:5000',
+            'instructions' => 'nullable|string|max:10000',
+            'category_id' => 'nullable|exists:categories,id',
+            'difficulty' => ['required', Rule::in(self::DIFFICULTIES)],
+            'duration_minutes' => 'nullable|integer|min:1|max:480',
+            'equipment' => 'nullable|string|max:255',
+            'equipment_options' => 'nullable|array',
+            'equipment_options.*' => Rule::in(array_keys(self::EQUIPMENT)),
+            'throwing_styles' => 'nullable|array',
+            'throwing_styles.*' => 'in:backhand,forehand',
+            'tags_input' => ['nullable', 'string', 'max:500', function (string $attribute, mixed $value, \Closure $fail) {
+                $tags = self::parseTags($value);
+                if (count($tags) > self::MAX_TAGS) {
+                    $fail('Use at most ' . self::MAX_TAGS . ' tags.');
+                }
+                if (collect($tags)->contains(fn (string $tag) => mb_strlen($tag) > self::MAX_TAG_LENGTH)) {
+                    $fail('Each tag can be at most ' . self::MAX_TAG_LENGTH . ' characters long.');
+                }
+            }],
+            'is_public' => 'boolean',
+        ];
+    }
+
+    /** "putting, circle 1, ,Putting" → ["putting", "circle 1"] */
+    public static function parseTags(?string $input): array
+    {
+        return collect(explode(',', (string) $input))
+            ->map(fn (string $tag) => trim($tag))
+            ->filter()
+            ->unique(fn (string $tag) => mb_strtolower($tag))
+            ->values()
+            ->all();
+    }
+
     private function filterRules(array $sorts): array
     {
         return [
@@ -116,27 +160,8 @@ class ExerciseController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'instructions' => 'nullable|string',
-            'category_id' => 'nullable|exists:categories,id',
-            'difficulty' => 'required|in:beginner,intermediate,advanced,expert',
-            'duration_minutes' => 'nullable|integer|min:1|max:480',
-            'equipment' => 'nullable|string|max:255',
-            'equipment_options' => 'nullable|array',
-            'equipment_options.*' => 'in:putters,midranges,fairway-drivers,distance-drivers',
-            'throwing_styles' => 'nullable|array',
-            'throwing_styles.*' => 'in:backhand,forehand',
-            'tags_input' => 'nullable|string',
-            'is_public' => 'boolean',
-        ]);
-
-        $tags = [];
-        if (!empty($validated['tags_input'])) {
-            $tags = array_map('trim', explode(',', $validated['tags_input']));
-            $tags = array_filter($tags);
-        }
+        $validated = $request->validate($this->exerciseRules());
+        $tags = self::parseTags($validated['tags_input'] ?? null);
 
         $category = !empty($validated['category_id']) ? Category::find($validated['category_id']) : null;
         $throwingStyles = $validated['throwing_styles'] ?? [];
@@ -171,7 +196,9 @@ class ExerciseController extends Controller
     {
         $exercise = Exercise::with(['category', 'user', 'comments.user'])
             ->findOrFail($id);
-        
+        // A private drill answers like a missing one (404), so ids can't be probed
+        abort_unless(Auth::user()->can('view', $exercise), 404);
+
         $isSaved = false;
         if (Auth::check()) {
             $isSaved = Auth::user()->addedExercises()
@@ -188,7 +215,7 @@ class ExerciseController extends Controller
     {
         $exercise = Exercise::findOrFail($id);
         
-        if (Auth::id() !== $exercise->user_id) {
+        if (Auth::user()->cannot('update', $exercise)) {
             return redirect()->route('exercises.index')
                 ->with('error', 'You can only edit your own exercises.');
         }
@@ -201,32 +228,13 @@ class ExerciseController extends Controller
     {
         $exercise = Exercise::findOrFail($id);
         
-        if (Auth::id() !== $exercise->user_id) {
+        if (Auth::user()->cannot('update', $exercise)) {
             return redirect()->route('exercises.index')
                 ->with('error', 'You can only update your own exercises.');
         }
         
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'instructions' => 'nullable|string',
-            'category_id' => 'nullable|exists:categories,id',
-            'difficulty' => 'required|in:beginner,intermediate,advanced,expert',
-            'duration_minutes' => 'nullable|integer|min:1|max:480',
-            'equipment' => 'nullable|string|max:255',
-            'equipment_options' => 'nullable|array',
-            'equipment_options.*' => 'in:putters,midranges,fairway-drivers,distance-drivers',
-            'throwing_styles' => 'nullable|array',
-            'throwing_styles.*' => 'in:backhand,forehand',
-            'tags_input' => 'nullable|string',
-            'is_public' => 'boolean',
-        ]);
-
-        $tags = [];
-        if (!empty($validated['tags_input'])) {
-            $tags = array_map('trim', explode(',', $validated['tags_input']));
-            $tags = array_filter($tags);
-        }
+        $validated = $request->validate($this->exerciseRules());
+        $tags = self::parseTags($validated['tags_input'] ?? null);
 
         $category = !empty($validated['category_id']) ? Category::find($validated['category_id']) : null;
         $throwingStyles = $validated['throwing_styles'] ?? [];
@@ -258,7 +266,7 @@ class ExerciseController extends Controller
     {
         $exercise = Exercise::findOrFail($id);
         
-        if (Auth::id() !== $exercise->user_id) {
+        if (Auth::user()->cannot('delete', $exercise)) {
             return redirect()->route('exercises.index')
                 ->with('error', 'You can only delete your own exercises.');
         }
@@ -274,11 +282,12 @@ class ExerciseController extends Controller
         $filters = $request->validate($this->filterRules(['recent', 'newest', 'easiest', 'hardest', 'shortest', 'popular']));
         $user = Auth::user();
 
-        $query = $user->addedExercises();
+        // A saved drill its author has since made private drops out of the list
+        $query = $user->addedExercises()->visibleTo($user);
         $this->applyFilters($query, $filters, 'recent');
 
         // Header numbers describe the whole saved list, not just the filtered page
-        $all = $user->addedExercises()->get(['exercises.id', 'exercises.user_id', 'exercises.category_id', 'exercises.duration_minutes']);
+        $all = $user->addedExercises()->visibleTo($user)->get(['exercises.id', 'exercises.user_id', 'exercises.category_id', 'exercises.duration_minutes']);
 
         return view('exercises.saved', [
             'exercises' => $query->paginate(12)->withQueryString(),
@@ -303,6 +312,7 @@ class ExerciseController extends Controller
 
         $exercise = Exercise::findOrFail($request->exercise_id);
         $user = Auth::user();
+        abort_unless($user->can('save', $exercise), 404);
 
         // Callers that send the wanted state get an idempotent request, so a double
         // click or a retry can't flip it back; forms without it simply toggle.
@@ -330,16 +340,6 @@ class ExerciseController extends Controller
         return redirect()->back()->with('success', $message);
     }
 
-    public function myExercises()
-    {
-        $exercises = Exercise::where('user_id', Auth::id())
-            ->with('category')
-            ->orderBy('created_at', 'desc')
-            ->paginate(12);
-        
-        return view('exercises.my-exercises', compact('exercises'));
-    }
-
     public function addComment(Request $request, $id)
     {
         $request->validate([
@@ -347,6 +347,7 @@ class ExerciseController extends Controller
         ]);
 
         $exercise = Exercise::findOrFail($id);
+        abort_unless(Auth::user()->can('comment', $exercise), 404);
 
         Comment::create([
             'exercise_id' => $exercise->id,
@@ -364,7 +365,8 @@ class ExerciseController extends Controller
             'comment_id' => 'required|exists:comments,id'
         ]);
 
-        $comment = Comment::findOrFail($request->comment_id);
+        // The comment has to belong to the drill in the URL
+        $comment = Comment::where('exercise_id', $id)->findOrFail($request->comment_id);
         
         if (Auth::id() !== $comment->user_id && Auth::id() !== $comment->exercise->user_id) {
             return redirect()->back()

@@ -6,6 +6,7 @@ use App\Models\Exercise;
 use App\Models\Category;
 use App\Models\User;
 use App\Models\Comment;
+use App\Rules\NotReservedEmail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -55,7 +56,7 @@ class DashboardController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users', new NotReservedEmail()],
             'password' => 'required|string|min:8|confirmed',
             'role' => 'required|in:user,verified,admin',
         ]);
@@ -70,9 +71,13 @@ class DashboardController extends Controller
         return redirect()->route('admin.users')->with('success', 'User created successfully!');
     }
 
+    /**
+     * The shared guest login is never managed here: one role change would otherwise turn it
+     * into a shared account with real rights for every visitor.
+     */
     public function editUser($id)
     {
-        $user = User::findOrFail($id);
+        $user = User::withoutGuests()->findOrFail($id);
         
         if ($user->id === Auth::id()) {
             return redirect()->route('admin.users')->with('error', 'You cannot edit your own account here.');
@@ -83,11 +88,11 @@ class DashboardController extends Controller
 
     public function updateUser(Request $request, $id)
     {
-        $user = User::findOrFail($id);
+        $user = User::withoutGuests()->findOrFail($id);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . $id,
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,' . $user->id, new NotReservedEmail()],
             'role' => 'required|in:user,verified,admin',
         ]);
 
@@ -107,7 +112,7 @@ class DashboardController extends Controller
 
     public function destroyUser($id)
     {
-        $user = User::findOrFail($id);
+        $user = User::withoutGuests()->findOrFail($id);
 
         if ($user->id === Auth::id()) {
             return redirect()->route('admin.users')->with('error', 'You cannot delete your own account.');
@@ -140,21 +145,17 @@ class DashboardController extends Controller
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'instructions' => 'nullable|string',
+            'description' => 'nullable|string|max:5000',
+            'instructions' => 'nullable|string|max:10000',
             'category_id' => 'nullable|exists:categories,id',
             'difficulty' => 'required|in:beginner,intermediate,advanced,expert',
             'duration_minutes' => 'nullable|integer|min:1|max:480',
             'equipment' => 'nullable|string|max:255',
-            'tags_input' => 'nullable|string',
+            'tags_input' => 'nullable|string|max:500',
             'is_public' => 'boolean',
         ]);
 
-        $tags = [];
-        if (!empty($validated['tags_input'])) {
-            $tags = array_map('trim', explode(',', $validated['tags_input']));
-            $tags = array_filter($tags);
-        }
+        $tags = array_slice(ExerciseController::parseTags($validated['tags_input'] ?? null), 0, ExerciseController::MAX_TAGS);
 
         $exercise->update([
             'title' => $validated['title'],
@@ -191,8 +192,8 @@ class DashboardController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:categories',
-            'description' => 'nullable|string',
-            'color' => 'nullable|string|max:7',
+            'description' => 'nullable|string|max:1000',
+            'color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 
         Category::create($validated);

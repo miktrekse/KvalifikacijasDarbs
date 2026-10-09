@@ -37,17 +37,17 @@
             <div class="ds-fieldgrid">
                 <div class="ds-field is-wide">
                     <label for="title" class="ds-field__label">Exercise title <i>*</i></label>
-                    <input type="text" name="title" id="title" required value="{{ old('title', $exercise->title) }}"
+                    <input type="text" name="title" id="title" required maxlength="255" value="{{ old('title', $exercise->title) }}"
                         class="ds-field__input @error('title') is-invalid @enderror">
                     @error('title') <p class="ds-field__error">{{ $message }}</p> @enderror
                 </div>
                 <div class="ds-field is-wide">
                     <label for="description" class="ds-field__label">Brief description</label>
-                    <textarea name="description" id="description" rows="3" class="ds-field__input">{{ old('description', $exercise->description) }}</textarea>
+                    <textarea name="description" id="description" rows="3" maxlength="5000" class="ds-field__input">{{ old('description', $exercise->description) }}</textarea>
                 </div>
                 <div class="ds-field is-wide">
                     <label for="instructions" class="ds-field__label">Detailed instructions</label>
-                    <textarea name="instructions" id="instructions" rows="8" class="ds-field__input">{{ old('instructions', $exercise->instructions) }}</textarea>
+                    <textarea name="instructions" id="instructions" rows="8" maxlength="10000" class="ds-field__input">{{ old('instructions', $exercise->instructions) }}</textarea>
                 </div>
             </div>
         </section>
@@ -98,7 +98,7 @@
                 </div>
                 <div class="ds-field">
                     <label for="tags" class="ds-field__label">Tags</label>
-                    <input type="text" name="tags_input" id="tags" value="{{ old('tags_input', implode(', ', $exercise->tags ?? [])) }}" class="ds-field__input" placeholder="putting, form, technique">
+                    <input type="text" name="tags_input" id="tags" maxlength="500" value="{{ old('tags_input', implode(', ', $exercise->tags ?? [])) }}" class="ds-field__input" placeholder="putting, form, technique">
                 </div>
                 <label class="ds-togglecard is-wide">
                     <span>

@@ -15,12 +15,18 @@ Route::get('/', function () {
     return redirect('/login');
 });
 
+// Rate limits are defined in AppServiceProvider
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
-    Route::post('/register', [AuthController::class, 'register']);
-    Route::post('/guest', [AuthController::class, 'guest'])->name('guest.login');
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:register');
+    Route::post('/guest', [AuthController::class, 'guest'])->middleware('throttle:guest-login')->name('guest.login');
+
+    Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
+    Route::post('/forgot-password', [AuthController::class, 'sendResetLink'])->middleware('throttle:password-reset')->name('password.email');
+    Route::get('/reset-password/{token}', [AuthController::class, 'showResetPassword'])->name('password.reset');
+    Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:password-reset')->name('password.update');
 });
 
 Route::middleware(['auth', 'readonly.guest'])->group(function () {
@@ -36,14 +42,14 @@ Route::middleware(['auth', 'readonly.guest'])->group(function () {
     Route::get('exercises/view/{id}', [ExerciseController::class, 'view'])->name('exercises.view');
     
     Route::get('/exercises/create', [ExerciseController::class, 'create'])->name('exercises.create');
-    Route::post('/exercises', [ExerciseController::class, 'store'])->name('exercises.store');
+    Route::post('/exercises', [ExerciseController::class, 'store'])->middleware('throttle:content')->name('exercises.store');
     Route::get('/exercises/edit/{id}', [ExerciseController::class, 'edit'])->name('exercises.edit');
-    Route::put('/exercises/{id}', [ExerciseController::class, 'update'])->name('exercises.update');
+    Route::put('/exercises/{id}', [ExerciseController::class, 'update'])->middleware('throttle:content')->name('exercises.update');
     Route::delete('/exercises/{id}', [ExerciseController::class, 'destroy'])->name('exercises.destroy');
-    
-    Route::post('/exercises/toggle-save', [ExerciseController::class, 'toggleSave'])->name('exercises.toggleSave');
-    
-    Route::post('/exercises/{id}/comments', [ExerciseController::class, 'addComment'])->name('exercises.comments.store');
+
+    Route::post('/exercises/toggle-save', [ExerciseController::class, 'toggleSave'])->middleware('throttle:60,1')->name('exercises.toggleSave');
+
+    Route::post('/exercises/{id}/comments', [ExerciseController::class, 'addComment'])->middleware('throttle:content')->name('exercises.comments.store');
     Route::delete('/exercises/{id}/comments', [ExerciseController::class, 'deleteComment'])->name('exercises.comments.delete');
     
     Route::get('/competitions', [CompetitionController::class, 'index'])->name('competitions.index');

@@ -107,6 +107,13 @@ php artisan courses:name LV          # atrod nosaukumus nenosauktajām trasēm
 
 Pirmās sacensības svaigā sistēmā izveido administrators (vai demo konts `verified@discstats.com` lokālajā vidē), jo parasts lietotājs par `verified` kļūst tikai pēc sacensībām.
 
+## Drošība un piekļuve
+
+- **Guest konts** (`guest@discstats.local`) tiek izveidots instalācijas laikā. Domēns `@discstats.local` ir rezervēts: to nevar izmantot ne reģistrācijā, ne admin panelī, guest kontā nevar ielogoties ar paroli, un "Continue as guest" nekad neielogo kontā, kuram nav `guest` lomas.
+- **Pieteikšanās ierobežojumi:** pēc 5 nepareizām parolēm vienam e-pastam pieteikšanās tiek bloķēta uz minūti; login, reģistrācijai, guest pieejai, paroles atjaunošanai, vingrinājumu veidošanai un komentāriem ir pieprasījumu limiti (`app/Providers/AppServiceProvider.php`).
+- **Paroles atjaunošana:** login lapā "Forgot password?" nosūta saiti uz e-pastu (derīga 60 minūtes). Ar `MAIL_MAILER=log` vēstule netiek sūtīta, bet ierakstīta `storage/logs/laravel.log`, no kurienes saiti var nokopēt; īstai sūtīšanai `.env` jānorāda SMTP iestatījumi.
+- **Privāti vingrinājumi** ir redzami tikai autoram un administratoriem. Noteikums ir vienuviet (`app/Policies/ExercisePolicy.php`) un attiecas uz skatīšanu, saglabāšanu un komentēšanu, arī tad, ja kāds atver vingrinājumu pēc ID.
+
 ## Testi
 
 Testi izmanto SQLite datubāzi atmiņā, tāpēc PHP vajag `pdo_sqlite` paplašinājumu. Laragon to ieslēdz `php.ini` failā, noņemot semikolu rindas sākumā:

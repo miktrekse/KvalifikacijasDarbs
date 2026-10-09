@@ -13,6 +13,13 @@
     <h1 class="mt-3">Step up to<br>the tee pad.</h1>
     <p class="mt-3 text-sm text-gray-500">Sign in to pick up your rounds, drills and tournaments where you left off.</p>
 
+    @if(session('success'))
+        <p class="mt-6 rounded-xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">{{ session('success') }}</p>
+    @endif
+    @if(session('error'))
+        <p class="mt-6 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{{ session('error') }}</p>
+    @endif
+
     <form class="mt-8 space-y-5" action="{{ route('login') }}" method="POST">
         @csrf
         <label class="ds-field" for="email">
@@ -33,10 +40,13 @@
             @enderror
         </label>
 
-        <label for="remember" class="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-600">
-            <input id="remember" name="remember" type="checkbox" class="h-4 w-4 rounded">
-            Remember me
-        </label>
+        <div class="flex items-center justify-between gap-3">
+            <label for="remember" class="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-600">
+                <input id="remember" name="remember" type="checkbox" value="1" class="h-4 w-4 rounded">
+                Remember me
+            </label>
+            <a href="{{ route('password.request') }}" class="text-sm font-bold text-flight hover:underline">Forgot password?</a>
+        </div>
 
         <button type="submit" class="ds-submit">
             Sign in

@@ -7,6 +7,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
@@ -122,6 +123,14 @@ class User extends Authenticatable
 
     /** Shared read-only account used by "Continue as guest". */
     public const GUEST_EMAIL = 'guest@discstats.local';
+
+    /** The app's own account domain: nobody can register or be given an address on it. */
+    private const RESERVED_EMAIL_DOMAIN = 'discstats.local';
+
+    public static function isReservedEmail(string $email): bool
+    {
+        return Str::lower(Str::afterLast(trim($email), '@')) === self::RESERVED_EMAIL_DOMAIN;
+    }
 
     public function isGuest(): bool
     {

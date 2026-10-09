@@ -19,19 +19,19 @@
     <div class="ds-fieldgrid">
         <div class="ds-field is-wide">
             <label for="title" class="ds-field__label">Exercise title <i>*</i></label>
-            <input type="text" name="title" id="title" required value="{{ old('title', $exercise->title ?? '') }}"
+            <input type="text" name="title" id="title" required maxlength="255" value="{{ old('title', $exercise->title ?? '') }}"
                 class="ds-field__input @error('title') is-invalid @enderror" placeholder="e.g., Perfect Your Putt">
             @error('title') <p class="ds-field__error">{{ $message }}</p> @enderror
         </div>
         <div class="ds-field is-wide">
             <label for="description" class="ds-field__label">Brief description</label>
-            <textarea name="description" id="description" rows="3"
+            <textarea name="description" id="description" rows="3" maxlength="5000"
                 class="ds-field__input @error('description') is-invalid @enderror" placeholder="A short summary of what this exercise teaches…">{{ old('description', $exercise->description ?? '') }}</textarea>
             @error('description') <p class="ds-field__error">{{ $message }}</p> @enderror
         </div>
         <div class="ds-field is-wide">
             <label for="instructions" class="ds-field__label">Detailed instructions</label>
-            <textarea name="instructions" id="instructions" rows="8"
+            <textarea name="instructions" id="instructions" rows="8" maxlength="10000"
                 class="ds-field__input @error('instructions') is-invalid @enderror" placeholder="Step-by-step instructions for performing this exercise…">{{ old('instructions', $exercise->instructions ?? '') }}</textarea>
             <p class="ds-field__hint">Use numbered steps or bullet points for clarity.</p>
             @error('instructions') <p class="ds-field__error">{{ $message }}</p> @enderror
@@ -126,9 +126,10 @@
     <div class="ds-fieldgrid">
         <div class="ds-field is-wide">
             <label for="tags" class="ds-field__label">Tags</label>
-            <input type="text" name="tags_input" id="tags" value="{{ old('tags_input', implode(', ', $exercise->tags ?? [])) }}"
+            <input type="text" name="tags_input" id="tags" maxlength="500" value="{{ old('tags_input', implode(', ', $exercise->tags ?? [])) }}"
                 class="ds-field__input" placeholder="putting, form, technique">
-            <p class="ds-field__hint">Separate tags with commas.</p>
+            <p class="ds-field__hint">Separate tags with commas — up to {{ \App\Http\Controllers\ExerciseController::MAX_TAGS }} tags, {{ \App\Http\Controllers\ExerciseController::MAX_TAG_LENGTH }} characters each.</p>
+            @error('tags_input') <p class="ds-field__error">{{ $message }}</p> @enderror
         </div>
         @if(Auth::user()->canPublish())
             <label class="ds-togglecard is-wide">

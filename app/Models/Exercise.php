@@ -34,6 +34,16 @@ class Exercise extends Model
         'updated_at' => 'datetime',
     ];
 
+    /** Drills this user may see: everything public plus their own private ones (admins see all). */
+    public function scopeVisibleTo($query, User $user)
+    {
+        if ($user->isAdmin()) {
+            return $query;
+        }
+
+        return $query->where(fn ($q) => $q->where('exercises.is_public', true)->orWhere('exercises.user_id', $user->id));
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
