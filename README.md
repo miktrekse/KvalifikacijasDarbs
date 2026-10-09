@@ -70,7 +70,7 @@ Tā palaiž `php artisan serve`, queue worker, **scheduler** (`schedule:work`), 
 
 ### Scheduler ir obligāts
 
-Sacensību dzīves cikls un trašu kartes atjaunošana notiek fonā:
+Sacensību dzīves cikls un trašu kartes atjaunošana notiek fonā. Lapu atvēršana sacensību stāvokli nemaina, tāpēc **bez schedulera grupas netiek izlozētas un sacensības nesākas**:
 
 | Komanda | Kad | Ko dara |
 | --- | --- | --- |
@@ -106,6 +106,13 @@ php artisan courses:name LV          # atrod nosaukumus nenosauktajām trasēm
 **Svarīgi:** loma `verified` DiscStats nozīmē *spēlētāja sacensību pieredzi*, **nevis** apstiprinātu e-pastu. Laravel kolonna `users.email_verified_at` ar šo lomu nav saistīta, un e-pasta verifikācija lietotnē netiek izmantota.
 
 Pirmās sacensības svaigā sistēmā izveido administrators (vai demo konts `verified@discstats.com` lokālajā vidē), jo parasts lietotājs par `verified` kļūst tikai pēc sacensībām.
+
+## Sacensību noteikumi
+
+- **Apstiprināšana:** verified spēlētāja izveidotas sacensības redz un tajās var pieteikties tikai pēc administratora apstiprinājuma. Neapstiprinātām sacensībām grupas netiek izlozētas.
+- **Reģistrācija** ir atvērta, kamēr sacensības ir apstiprinātas un publiskas, nav pagājis reģistrācijas termiņš un līdz grupu izlozei (30 min pirms starta) vēl ir laiks. Termiņš un sākuma laiks tiek nolasīti sacensību laika joslā (`COMPETITION_TIMEZONE`). Dalībnieku limits tiek pārbaudīts transakcijā ar rindas bloķēšanu, tāpēc to nevar pārsniegt arī vienlaicīgi piesakoties. Līdz izlozei spēlētājs var mainīt divīziju vai izstāties.
+- **Trase:** ja organizators trasi izvēlas kartē, sacensībām tiek saglabātas tās koordinātas un konkrētais bedrīšu layouts (par un distances). Pēc tā tiek veidotas sacensību bedrītes un rēķināti reitingi. Ja layouts nav zināms, katra bedrīte ir par 3.
+- **Pēc izlozes** administrators vairs nevar mainīt datumu, sākuma laiku, trasi, bedrīšu skaitu, formātu un divīzijas, jo no tiem jau ir izveidotas kartītes un bedrītes. Statusu "completed" var iestatīt tikai tad, ja vismaz viens spēlētājs ir pabeidzis visas bedrītes.
 
 ## Drošība un piekļuve
 

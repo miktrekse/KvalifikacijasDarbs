@@ -21,9 +21,6 @@ class CompetitionGrouping
 {
     public const MIN_GROUP_SIZE = 4;
 
-    /** Words that say nothing about which course it is ("disku golfa parks" etc). */
-    private const NAME_NOISE = ['disku', 'disc', 'golfa', 'golfs', 'golf', 'laukums', 'parks', 'park', 'course', 'dgc', 'the'];
-
     /**
      * @return int[] group sizes, largest first
      */
@@ -98,8 +95,12 @@ class CompetitionGrouping
     }
 
     /**
-     * Creates the competition's holes, taking par and length from the curated
-     * UDisc layout when the course name matches one, otherwise par 3.
+     * Creates the competition's holes. Par and length come, in order of trust, from:
+     *  1. the layout stored with the event when the organizer picked the course on the map;
+     *  2. the curated layout of the course at the event's stored coordinates;
+     *  3. a curated course whose name is exactly the event's course name.
+     * Holes nothing is known about are par 3. A curated layout is only used when its hole
+     * count matches the event, so a 9-hole event never gets an 18-hole course's pars.
      */
     public static function ensureHoles(Competition $competition): void
     {
@@ -107,7 +108,7 @@ class CompetitionGrouping
             return;
         }
 
-        $layoutHoles = collect(self::matchLayout($competition)['holes'] ?? [])->keyBy('number');
+        $layoutHoles = self::layoutHoles($competition);
         $now = now();
 
         $competition->courseHoles()->insert(collect(range(1, max(1, $competition->holes)))
@@ -115,34 +116,47 @@ class CompetitionGrouping
                 'competition_id' => $competition->id,
                 'number' => $number,
                 'par' => $layoutHoles[$number]['par'] ?? 3,
-                'distance_m' => isset($layoutHoles[$number]['length_ft']) ? (int) round($layoutHoles[$number]['length_ft'] * 0.3048) : null,
+                'distance_m' => $layoutHoles[$number]['distance_m'] ?? null,
                 'created_at' => $now,
                 'updated_at' => $now,
             ])->all());
     }
 
-    private static function matchLayout(Competition $competition): ?array
+    /** @return array<int, array{par: int, distance_m: ?int}> keyed by hole number */
+    public static function layoutHoles(Competition $competition): array
     {
-        $wanted = self::nameTokens((string) $competition->course_name);
-        if (!$wanted) {
-            return null;
+        if (!empty($competition->course_layout)) {
+            return collect($competition->course_layout)
+                ->keyBy('number')
+                ->map(fn (array $hole) => ['par' => (int) $hole['par'], 'distance_m' => $hole['distance_m'] ?? null])
+                ->all();
         }
 
-        foreach (CuratedCourses::all() as $course) {
-            if (!array_intersect($wanted, self::nameTokens($course['name']))) {
-                continue;
-            }
+        $curated = $competition->course_lat !== null && $competition->course_lon !== null
+            ? CuratedCourses::findNear((float) $competition->course_lat, (float) $competition->course_lon)
+            : self::curatedByExactName((string) $competition->course_name);
 
-            return collect($course['layouts'])->firstWhere('holes_count', $competition->holes);
-        }
+        $layout = collect($curated['layouts'] ?? [])->firstWhere('holes_count', $competition->holes);
 
-        return null;
+        return collect($layout['holes'] ?? [])
+            ->keyBy('number')
+            ->map(fn (array $hole) => [
+                'par' => (int) $hole['par'],
+                'distance_m' => isset($hole['length_ft']) ? (int) round($hole['length_ft'] * 0.3048) : null,
+            ])
+            ->all();
     }
 
-    private static function nameTokens(string $name): array
+    private static function curatedByExactName(string $name): ?array
     {
-        $tokens = preg_split('/[^a-z0-9]+/', Str::lower(Str::ascii($name)), -1, PREG_SPLIT_NO_EMPTY);
+        $wanted = self::nameKey($name);
 
-        return array_values(array_filter($tokens, fn (string $token) => strlen($token) > 2 && !in_array($token, self::NAME_NOISE, true)));
+        return $wanted === '' ? null : collect(CuratedCourses::all())->first(fn (array $course) => self::nameKey($course['name']) === $wanted);
+    }
+
+    /** "Priekuļu Disku Golfa Laukums" and "priekulu disku golfa laukums" are the same name. */
+    private static function nameKey(string $name): string
+    {
+        return implode(' ', preg_split('/[^a-z0-9]+/', Str::lower(Str::ascii($name)), -1, PREG_SPLIT_NO_EMPTY));
     }
 }

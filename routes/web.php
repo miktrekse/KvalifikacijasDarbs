@@ -55,7 +55,8 @@ Route::middleware(['auth', 'readonly.guest'])->group(function () {
     Route::get('/competitions', [CompetitionController::class, 'index'])->name('competitions.index');
     Route::get('/competitions/create', [CompetitionController::class, 'create'])->name('competitions.create');
     Route::post('/competitions', [CompetitionController::class, 'store'])->name('competitions.store');
-    Route::post('/competitions/{id}/register', [CompetitionController::class, 'register'])->name('competitions.register');
+    Route::post('/competitions/{id}/register', [CompetitionController::class, 'register'])->middleware('throttle:content')->name('competitions.register');
+    Route::delete('/competitions/{id}/register', [CompetitionController::class, 'unregister'])->middleware('throttle:content')->name('competitions.unregister');
     Route::get('/competitions/view/{id}', [CompetitionController::class, 'view'])->name('competitions.view');
     Route::get('/competitions/edit/{id}', [CompetitionController::class, 'edit'])->name('competitions.edit');
     Route::put('/competitions/{id}', [CompetitionController::class, 'update'])->name('competitions.update');

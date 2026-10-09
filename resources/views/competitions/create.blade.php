@@ -44,7 +44,7 @@
                 </div>
                 <div class="ds-field is-wide">
                     <label for="description" class="ds-field__label">Description</label>
-                    <textarea name="description" id="description" rows="4"
+                    <textarea name="description" id="description" rows="4" maxlength="5000"
                         class="ds-field__input @error('description') is-invalid @enderror" placeholder="Rules, prizes, schedule…">{{ old('description') }}</textarea>
                     @error('description') <p class="ds-field__error">{{ $message }}</p> @enderror
                 </div>
@@ -125,6 +125,13 @@
                         class="ds-field__input @error('location') is-invalid @enderror" placeholder="City, Country">
                     @error('location') <p class="ds-field__error">{{ $message }}</p> @enderror
                 </div>
+
+                {{-- The course picked on the map is stored with the event (position + exact hole layout),
+                     so the tournament is played and rated on that layout, not on a guess from the name --}}
+                <input type="hidden" name="course_lat" id="course_lat" value="{{ old('course_lat') }}">
+                <input type="hidden" name="course_lon" id="course_lon" value="{{ old('course_lon') }}">
+                <input type="hidden" name="holes_data" id="holes_data" value="{{ old('holes_data') }}">
+                <div class="training-layout-picker is-wide" id="competition-layout-picker" hidden></div>
             </div>
         </section>
 
@@ -151,7 +158,7 @@
                 </div>
                 <div class="ds-field">
                     <label for="holes" class="ds-field__label">Holes <i>*</i></label>
-                    <input type="number" name="holes" id="holes" min="1" max="99" required value="{{ old('holes', 18) }}"
+                    <input type="number" name="holes" id="holes" min="1" max="36" required value="{{ old('holes', 18) }}"
                         class="ds-field__input @error('holes') is-invalid @enderror">
                     @error('holes') <p class="ds-field__error">{{ $message }}</p> @enderror
                 </div>
@@ -191,6 +198,7 @@
                     </button>
                 </div>
                 <div id="division-rules" class="mt-3 space-y-2"></div>
+                @error('division_rules') <p class="ds-field__error">{{ $message }}</p> @enderror
             </div>
         </section>
 
@@ -206,7 +214,7 @@
                 <div class="ds-field">
                     <label for="entry_fee" class="ds-field__label">Entry fee</label>
                     <div class="ds-inputgroup">
-                        <input type="number" name="entry_fee" id="entry_fee" value="{{ old('entry_fee', 0) }}" step="0.01" min="0"
+                        <input type="number" name="entry_fee" id="entry_fee" value="{{ old('entry_fee', 0) }}" step="0.01" min="0" max="99999.99"
                             class="ds-field__input @error('entry_fee') is-invalid @enderror" placeholder="0.00">
                         <select name="currency" aria-label="Currency" class="ds-field__input">
                             <option value="EUR" {{ old('currency') == 'EUR' ? 'selected' : '' }}>EUR</option>
@@ -218,7 +226,7 @@
                 </div>
                 <div class="ds-field">
                     <label for="max_participants" class="ds-field__label">Max participants</label>
-                    <input type="number" name="max_participants" id="max_participants" value="{{ old('max_participants') }}" min="1"
+                    <input type="number" name="max_participants" id="max_participants" value="{{ old('max_participants') }}" min="1" max="1000"
                         class="ds-field__input @error('max_participants') is-invalid @enderror" placeholder="Unlimited">
                     @error('max_participants') <p class="ds-field__error">{{ $message }}</p> @enderror
                 </div>
@@ -287,11 +295,61 @@
             return element.innerHTML;
         }
 
+        const courseNameInput = document.getElementById('course_name');
+        const layoutPicker = document.getElementById('competition-layout-picker');
+
         function selectCourse(course) {
-            document.getElementById('course_name').value = course.name;
+            courseNameInput.value = course.name;
+            document.getElementById('course_lat').value = course.lat;
+            document.getElementById('course_lon').value = course.lon;
             if (course.address || course.locality) document.getElementById('location').value = course.address || course.locality;
             if (course.holes) document.getElementById('holes').value = course.holes;
+            renderLayoutPicker(course.layouts || []);
             map.flyTo([course.lat, course.lon], 13, { duration: 0.6 });
+        }
+
+        // Typing another course name means the picked course (and its layout) no longer applies
+        courseNameInput.addEventListener('input', () => {
+            document.getElementById('course_lat').value = '';
+            document.getElementById('course_lon').value = '';
+            renderLayoutPicker([]);
+        });
+
+        function applyLayout(layout) {
+            document.getElementById('holes').value = layout.holes_count;
+            document.getElementById('holes_data').value = JSON.stringify((layout.hole_details || []).map(hole => ({
+                number: hole.number,
+                par: hole.par,
+                distance_m: hole.length_m,
+            })));
+            const summary = document.getElementById('competition-layout-summary');
+            if (summary) summary.textContent = `${layout.holes_count} holes · Par ${layout.par}`;
+        }
+
+        function renderLayoutPicker(layouts) {
+            if (!layouts.length) {
+                layoutPicker.hidden = true;
+                layoutPicker.innerHTML = '';
+                document.getElementById('holes_data').value = '';
+                return;
+            }
+
+            layoutPicker.hidden = false;
+            const tabs = layouts.length > 1
+                ? `<div class="training-layout-picker__tabs">${layouts.map((layout, i) => `<button type="button" class="training-layout-picker__tab${i === 0 ? ' is-active' : ''}" data-layout-index="${i}">${escapeHtml(layout.name)}</button>`).join('')}</div>`
+                : `<p class="training-layout-picker__single">${escapeHtml(layouts[0].name)}</p>`;
+            layoutPicker.innerHTML = `<span class="training-layout-picker__label">Verified layout &mdash; the tournament uses this par &amp; these distances</span>${tabs}<p class="training-layout-picker__summary" id="competition-layout-summary"></p>`;
+
+            const tabButtons = [...layoutPicker.querySelectorAll('.training-layout-picker__tab')];
+            tabButtons.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabButtons.forEach(t => t.classList.remove('is-active'));
+                    tab.classList.add('is-active');
+                    applyLayout(layouts[Number(tab.dataset.layoutIndex)]);
+                });
+            });
+
+            applyLayout(layouts[0]);
         }
 
         function renderCourses() {

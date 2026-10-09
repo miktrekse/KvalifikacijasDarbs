@@ -74,8 +74,8 @@ class CompetitionScoringController extends Controller
 
     public function show(Request $request, $id)
     {
+        // Only reads: the scheduler draws the groups (competitions:sync), score entry moves the event on
         $competition = Competition::findOrFail($id);
-        $competition->syncLifecycle();
 
         if (!$competition->hasGroups()) {
             return redirect()->route('competitions.view', $competition->id)

@@ -276,16 +276,29 @@
                                 Sign up to register
                             </button>
                         </form>
-                    @elseif($competition->hasGroups())
-                        <p class="mb-3 text-sm text-gray-500 text-center">Registration closed — groups have been drawn.</p>
-                    @elseif($competition->status === 'upcoming' && $registrationDivisions->isNotEmpty() && (!$competition->max_participants || $competition->registrations->count() < $competition->max_participants))
+                    @elseif($registrationClosed)
+                        {{-- The same rule the server applies (Competition::registrationClosedReason) --}}
+                        <p class="mb-3 text-sm text-gray-500 text-center">{{ $registrationClosed }}</p>
+                    @elseif($myRegistration)
+                        <button type="button" id="open-registration-modal"
+                            class="block w-full mb-3 text-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                            Change division or phone
+                        </button>
+                        <form method="POST" action="{{ route('competitions.unregister', $competition->id) }}" onsubmit="return confirm('Withdraw from this competition?');">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="block w-full mb-3 text-center px-4 py-3 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition font-semibold">
+                                Withdraw
+                            </button>
+                        </form>
+                    @elseif($competition->max_participants && $competition->registrations->count() >= $competition->max_participants)
+                        <p class="mb-3 text-sm text-red-600 text-center">Registration is full.</p>
+                    @elseif($registrationDivisions->isNotEmpty())
                         <button type="button" id="open-registration-modal"
                             class="block w-full mb-3 text-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
                             Register for this competition
                         </button>
-                    @elseif($competition->max_participants && $competition->registrations->count() >= $competition->max_participants)
-                        <p class="mb-3 text-sm text-red-600 text-center">Registration is full.</p>
-                    @elseif($registrationDivisions->isEmpty())
+                    @else
                         <p class="mb-3 text-sm text-gray-500 text-center">None of this event's divisions are open to you (gender, age or rating limits).</p>
                     @endif
                 @else
@@ -345,7 +358,7 @@
                     <option value="">Select a division</option>
                     @foreach($divisionBlockers as $division => $blocker)
                         @php $rule = ($competition->division_rules ?? [])[$division] ?? null; @endphp
-                        <option value="{{ $division }}" @selected(old('division') === $division) @disabled($blocker)>{{ $division }}{{ $rule && $rule['gender'] !== 'any' ? ' · ' . ucfirst($rule['gender']) . ' only' : '' }}{{ $rule && ($rule['min_age'] !== null || $rule['max_age'] !== null) ? ' · age ' . ($rule['min_age'] ?? 0) . '-' . ($rule['max_age'] ?? 'up') : '' }}{{ $rule && $rule['min_rating'] !== null ? ' · rating ' . $rule['min_rating'] . '+' : '' }}{{ isset(\App\Models\User::DIVISION_MAX_RATINGS[$division]) ? ' · max ' . \App\Models\User::DIVISION_MAX_RATINGS[$division] : '' }}{{ $blocker ? ' — ' . $blocker : '' }}</option>
+                        <option value="{{ $division }}" @selected(old('division', $myRegistration?->division) === $division) @disabled($blocker)>{{ $division }}{{ $rule && $rule['gender'] !== 'any' ? ' · ' . ucfirst($rule['gender']) . ' only' : '' }}{{ $rule && ($rule['min_age'] !== null || $rule['max_age'] !== null) ? ' · age ' . ($rule['min_age'] ?? 0) . '-' . ($rule['max_age'] ?? 'up') : '' }}{{ $rule && $rule['min_rating'] !== null ? ' · rating ' . $rule['min_rating'] . '+' : '' }}{{ isset(\App\Models\User::DIVISION_MAX_RATINGS[$division]) ? ' · max ' . \App\Models\User::DIVISION_MAX_RATINGS[$division] : '' }}{{ $blocker ? ' — ' . $blocker : '' }}</option>
                     @endforeach
                 </select>
                 @if($registrationDivisions->isEmpty())
@@ -355,7 +368,7 @@
             </div>
             <div>
                 <label for="registration-phone" class="block text-sm font-medium text-gray-700">Phone number</label>
-                <input type="tel" name="phone" id="registration-phone" value="{{ old('phone') }}" required placeholder="+371 2000 0000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
+                <input type="tel" name="phone" id="registration-phone" value="{{ old('phone', $myRegistration?->phone) }}" required placeholder="+371 2000 0000" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500">
                 @error('phone')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
             <div class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-4 py-3">

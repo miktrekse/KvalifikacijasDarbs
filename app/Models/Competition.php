@@ -42,11 +42,17 @@ class Competition extends Model
         'is_public',
         'results_link',
         'notes',
+        'course_lat',
+        'course_lon',
+        'course_layout',
     ];
 
     protected $casts = [
         'event_date' => 'date',
         'division_rules' => 'array',
+        'course_lat' => 'float',
+        'course_lon' => 'float',
+        'course_layout' => 'array',
         'groups_assigned_at' => 'datetime',
         'rated_at' => 'datetime',
         'course_rating_before' => 'float',
@@ -83,6 +89,58 @@ class Competition extends Model
         return $holes->every(fn (CompetitionHole $hole) => $players->diff(
             $hole->useOfficialShots()->shots->where('result', 'in_basket')->pluck('user_id')
         )->isEmpty());
+    }
+
+    /** True when at least one player on a card has a settled score on every hole. */
+    public function hasFinishedRound(): bool
+    {
+        $players = $this->registrations()->whereNotNull('competition_group_id')->pluck('user_id');
+        $holes = $this->courseHoles()->with('shots')->get()->each->useOfficialShots();
+        if ($players->isEmpty() || $holes->isEmpty()) {
+            return false;
+        }
+
+        return $players->contains(fn ($userId) => $holes->every(
+            fn (CompetitionHole $hole) => $hole->shots->where('user_id', $userId)->where('result', 'in_basket')->isNotEmpty()
+        ));
+    }
+
+    /** Unapproved and private events exist only for admins, also for direct links and POSTs. */
+    public function isVisibleTo(?User $user): bool
+    {
+        return ($this->is_approved && $this->is_public) || ($user?->isAdmin() ?? false);
+    }
+
+    /**
+     * Why players can't register, change their registration or withdraw right now, or null
+     * while registration is open. The one rule both the page and the controller use.
+     */
+    public function registrationClosedReason(): ?string
+    {
+        return match (true) {
+            !$this->is_approved => 'This competition is still waiting for approval.',
+            $this->status === 'cancelled' => 'This competition was cancelled.',
+            $this->hasGroups() || $this->status !== 'upcoming' => 'Registration is closed — groups have already been drawn.',
+            now()->gte($this->groupsDrawAt()) => 'Registration is closed — groups are being drawn.',
+            (bool) $this->registrationDeadline()?->isPast() => 'The registration deadline has passed.',
+            default => null,
+        };
+    }
+
+    /**
+     * The deadline is typed in as local time, like the start time, so it is read in the
+     * competition timezone too (a plain cast would treat 18:00 Riga time as 18:00 UTC).
+     */
+    public function registrationDeadline(): ?Carbon
+    {
+        $raw = $this->getAttributes()['registration_deadline'] ?? null;
+
+        return $raw ? Carbon::parse($raw, config('app.competition_timezone')) : null;
+    }
+
+    public function isFull(): bool
+    {
+        return $this->max_participants !== null && $this->registrations()->count() >= $this->max_participants;
     }
 
     /**
@@ -157,11 +215,13 @@ class Competition extends Model
     /**
      * Moves the competition along its timeline: draws the groups 30 minutes
      * before the start and marks it ongoing once the round has started.
-     * Called by the scheduler every minute and lazily whenever the page is opened.
+     * Called by the scheduler every minute (competitions:sync) and when a score is entered;
+     * pages that only show data never change it. An event waiting for approval stays where
+     * it is: no groups are drawn for it, so it is still open for registration once approved.
      */
     public function syncLifecycle(): void
     {
-        if ($this->isClosed()) {
+        if ($this->isClosed() || !$this->is_approved) {
             return;
         }
 

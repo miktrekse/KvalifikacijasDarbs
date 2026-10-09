@@ -31,6 +31,16 @@
         </div>
         <h1 class="mt-4">{{ $competition->name }}</h1>
         <p class="mt-3 max-w-lg text-sm sm:text-base">Update event details, approval and status. Changes are visible to registered players right away.</p>
+        @if($competition->hasGroups())
+            <p class="mt-3 max-w-lg rounded-xl bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">
+                The groups have been drawn, so the date, start time, course, number of holes, format and divisions are locked — the cards and holes were built from them.
+            </p>
+        @endif
+        @if($errors->any())
+            <ul class="mt-3 max-w-lg rounded-xl bg-red-100 px-4 py-3 text-sm text-red-800">
+                @foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach
+            </ul>
+        @endif
         <nav class="ds-hero__steps mt-6" aria-label="Form sections">
             <a href="#admin"><b>★</b>Admin</a>
             <a href="#basics"><b>1</b>Basics</a>
@@ -104,7 +114,7 @@
                 </div>
                 <div class="ds-field is-wide">
                     <label for="description" class="ds-field__label">Description</label>
-                    <textarea name="description" id="description" rows="4"
+                    <textarea name="description" id="description" rows="4" maxlength="5000"
                         class="ds-field__input @error('description') is-invalid @enderror" placeholder="Rules, prizes, schedule…">{{ old('description', $competition->description) }}</textarea>
                     @error('description') <p class="ds-field__error">{{ $message }}</p> @enderror
                 </div>
@@ -177,7 +187,7 @@
                 </div>
                 <div class="ds-field">
                     <label for="holes" class="ds-field__label">Holes <i>*</i></label>
-                    <input type="number" name="holes" id="holes" min="1" max="99" required value="{{ old('holes', $competition->holes) }}"
+                    <input type="number" name="holes" id="holes" min="1" max="36" required value="{{ old('holes', $competition->holes) }}"
                         class="ds-field__input @error('holes') is-invalid @enderror">
                     @error('holes') <p class="ds-field__error">{{ $message }}</p> @enderror
                 </div>
@@ -243,7 +253,7 @@
                 <div class="ds-field">
                     <label for="entry_fee" class="ds-field__label">Entry fee</label>
                     <div class="ds-inputgroup">
-                        <input type="number" name="entry_fee" id="entry_fee" value="{{ old('entry_fee', $competition->entry_fee) }}" step="0.01" min="0"
+                        <input type="number" name="entry_fee" id="entry_fee" value="{{ old('entry_fee', $competition->entry_fee) }}" step="0.01" min="0" max="99999.99"
                             class="ds-field__input @error('entry_fee') is-invalid @enderror" placeholder="0.00">
                         <select name="currency" aria-label="Currency" class="ds-field__input">
                             <option value="EUR" {{ old('currency', $competition->currency) == 'EUR' ? 'selected' : '' }}>EUR</option>
@@ -255,7 +265,7 @@
                 </div>
                 <div class="ds-field">
                     <label for="max_participants" class="ds-field__label">Max participants</label>
-                    <input type="number" name="max_participants" id="max_participants" value="{{ old('max_participants', $competition->max_participants) }}" min="1"
+                    <input type="number" name="max_participants" id="max_participants" value="{{ old('max_participants', $competition->max_participants) }}" min="1" max="1000"
                         class="ds-field__input @error('max_participants') is-invalid @enderror" placeholder="Unlimited">
                     @error('max_participants') <p class="ds-field__error">{{ $message }}</p> @enderror
                 </div>
