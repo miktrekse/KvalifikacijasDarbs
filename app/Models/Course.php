@@ -16,6 +16,9 @@ class Course extends Model
 
     public const POINTS_PER_STROKE = 7;
 
+    /** Lowest round rating: every rating column is unsigned. */
+    public const MIN_RATING = 0;
+
     protected $fillable = [
         'name',
         'name_key',
@@ -41,10 +44,16 @@ class Course extends Model
         return Str::slug(Str::ascii($name)) ?: 'course';
     }
 
-    /** Round rating for a score on this layout, e.g. par = 950, −3 = 971, +2 = 936. */
+    /**
+     * Round rating for a score on this layout, e.g. par = 950, −3 = 971, +2 = 936.
+     * A very high score (up to 20 a hole is allowed) would go below zero, so ratings
+     * stop at 0: player ratings are averages of these and are stored unsigned.
+     */
     public function ratingFor(int $strokes, ?float $parRating = null): int
     {
-        return (int) round(($parRating ?? $this->par_rating) - $this->points_per_stroke * ($strokes - $this->par));
+        $rating = (int) round(($parRating ?? $this->par_rating) - $this->points_per_stroke * ($strokes - $this->par));
+
+        return max(self::MIN_RATING, $rating);
     }
 
     public function competitions(): HasMany

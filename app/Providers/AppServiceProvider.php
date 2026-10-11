@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\Overpass;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -26,5 +27,9 @@ class AppServiceProvider extends ServiceProvider
 
         // Writes that add rows other players see (drills, comments), limited per account
         RateLimiter::for('content', fn (Request $request) => Limit::perMinute(10)->by('content:' . ($request->user()?->id ?? $request->ip())));
+
+        // Course map lookups can wait on OpenStreetMap, so they are limited per account
+        // (per IP for the shared guest). Overpass caps the live lookups separately.
+        RateLimiter::for('courses', fn (Request $request) => Limit::perMinute(30)->by('courses:' . Overpass::visitorKey($request)));
     }
 }

@@ -4,25 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Support\CourseNamer;
 use App\Support\CuratedCourses;
-use Illuminate\Http\Client\RequestException;
+use App\Support\Overpass;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 
+/**
+ * The course map: OpenStreetMap disc golf courses per country or near the visitor, and
+ * hole layouts. Talking to the Overpass servers (failover, cache, lookup cap) is left
+ * to App\Support\Overpass; this class decides what to ask for and shapes the answer.
+ */
 class CourseController extends Controller
 {
-    /**
-     * Public Overpass servers in the order we try them, and whether each can run
-     * "inside this country's border" (area) queries. Servers that fail or say they
-     * are busy are skipped for a while.
-     */
-    private const OVERPASS_ENDPOINTS = [
-        'https://overpass-api.de/api/interpreter' => true,
-        'https://overpass.openstreetmap.fr/api/interpreter' => false,
-        'https://overpass.kumi.systems/api/interpreter' => true,
-        'https://overpass.private.coffee/api/interpreter' => true,
-    ];
+    public function __construct(private Overpass $overpass)
+    {
+    }
 
     /**
      * Bounding boxes (south,west,north,east) for each supported country; big countries
@@ -72,11 +69,6 @@ class CourseController extends Controller
     private const COUNTRY_BUDGET = 35;
     private const NEARBY_BUDGET = 12;
 
-    private int $budgetSeconds = self::NEARBY_BUDGET;
-
-    /** The cache warmer refetches even when a fresh copy exists. */
-    private bool $refresh = false;
-
     /**
      * Pre-loads a country's courses into the cache (used by the daily courses:warm job),
      * with a more patient budget than a visitor gets. Returns how many courses were cached,
@@ -84,8 +76,7 @@ class CourseController extends Controller
      */
     public function warm(string $country): ?int
     {
-        $this->budgetSeconds = 120;
-        $this->refresh = true;
+        $this->overpass->patient();
 
         $response = $this->data(Request::create('/courses/data', 'GET', ['country' => $country]));
 
@@ -100,13 +91,12 @@ class CourseController extends Controller
      */
     public function name(string $country): int
     {
-        $this->budgetSeconds = 120;
-        $this->refresh = true;
+        $this->overpass->patient();
 
         return app(CourseNamer::class)->resolve(
             $country,
             $this->cachedCountryElements([$country]),
-            fn (string $query) => $this->runOverpassQuery(['area' => $query]),
+            fn (string $query) => $this->overpass->run(['area' => $query]),
         );
     }
 
@@ -156,7 +146,7 @@ class CourseController extends Controller
                     'bbox' => '[out:json][timeout:25];' . sprintf($wanted, '(' . $nearbyBounds . ')'),
                 ]]);
             } else {
-                $this->budgetSeconds = max($this->budgetSeconds, self::COUNTRY_BUDGET);
+                $this->overpass->allowSeconds(self::COUNTRY_BUDGET);
                 $boxes = self::COUNTRY_BOXES[$country];
                 $queries = collect($boxes)->mapWithKeys(fn (string $box, int $index) => ['country:' . $country . ':' . $index => [
                     // Precise: only courses inside the country's border (needs a server with area support)
@@ -171,7 +161,7 @@ class CourseController extends Controller
 
             // Country course lists are cached (and warmed daily), so a nearby search inside a covered
             // country can be answered straight from them without asking OpenStreetMap at all.
-            if ($isNearbySearch && !$this->refresh) {
+            if ($isNearbySearch && !$this->overpass->isRefreshing()) {
                 $known = $this->cachedCountryElements($countries);
                 $coversVisitor = $known->contains(function (array $element) use ($latitude, $longitude) {
                     $lat = $element['lat'] ?? $element['center']['lat'] ?? null;
@@ -187,7 +177,7 @@ class CourseController extends Controller
             }
 
             foreach ($queries as $cacheKey => $query) {
-                $result = $this->cachedOverpass($cacheKey, $query, $isNearbySearch ? self::NEARBY_TTL : self::COUNTRY_TTL);
+                $result = $this->overpass->cached($cacheKey, $query, $isNearbySearch ? self::NEARBY_TTL : self::COUNTRY_TTL, Overpass::visitorKey($request));
                 if ($result !== null) {
                     $elements = $elements->merge($result);
                     $successfulQuery = true;
@@ -328,7 +318,8 @@ class CourseController extends Controller
             . 'node["disc_golf"="hole"](around:1200,' . $latitude . ',' . $longitude . '););'
             . 'out tags center;';
 
-        $elements = $this->cachedOverpass(sprintf('holes:%.4f,%.4f', $latitude, $longitude), ['bbox' => $query], self::HOLES_TTL);
+        $elements = $this->overpass->allowSeconds(self::NEARBY_BUDGET)
+            ->cached(sprintf('holes:%.4f,%.4f', $latitude, $longitude), ['bbox' => $query], self::HOLES_TTL, Overpass::visitorKey($request));
 
         if ($elements === null) {
             return response()->json([
@@ -360,113 +351,6 @@ class CourseController extends Controller
             'total_par' => $parredHoles->isNotEmpty() ? $parredHoles->sum(fn (array $hole) => (int) $hole['par']) : null,
             'source' => 'OpenStreetMap',
         ]);
-    }
-
-    /**
-     * Returns cached Overpass results, fetching them when missing. A long-lived copy
-     * is kept so a later OpenStreetMap outage serves the last good data, not an error.
-     */
-    private function cachedOverpass(string $key, array $queries, int $ttl): ?array
-    {
-        $key = 'overpass:' . $key;
-
-        $cached = $this->refresh ? null : Cache::get($key);
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        // A lookup that just failed isn't retried for 5 minutes, so nobody waits on it twice
-        if (!$this->refresh && Cache::has($key . ':failed')) {
-            return Cache::get($key . ':stale');
-        }
-
-        $elements = $this->runOverpassQuery($queries);
-        // A busy server can answer a country query with nothing at all; don't let that wipe out a good list
-        if ($elements === [] && str_starts_with($key, 'overpass:country:') && !empty(Cache::get($key . ':stale'))) {
-            $elements = null;
-        }
-        if ($elements !== null) {
-            Cache::put($key, $elements, $ttl);
-            Cache::put($key . ':stale', $elements, now()->addDays(90));
-            Cache::forget($key . ':failed');
-
-            return $elements;
-        }
-
-        Cache::put($key . ':failed', true, now()->addMinutes(5));
-
-        return Cache::get($key . ':stale');
-    }
-
-    /**
-     * Runs a query against the public Overpass servers within the time budget.
-     * $queries holds an 'area' (precise) and/or 'bbox' (works everywhere) version;
-     * each server gets the best version it supports.
-     */
-    private function runOverpassQuery(array $queries): ?array
-    {
-        $deadline = microtime(true) + $this->budgetSeconds;
-
-        foreach (self::OVERPASS_ENDPOINTS as $endpoint => $supportsArea) {
-            $query = ($supportsArea ? ($queries['area'] ?? null) : null) ?? $queries['bbox'] ?? null;
-            $downKey = 'overpass:down:' . md5($endpoint);
-            // Visitors skip servers marked busy; the background warm-up is patient and tries them anyway
-            if ($query === null || (!$this->refresh && Cache::has($downKey))) {
-                continue;
-            }
-
-            for ($attempt = 1; $attempt <= 2; $attempt++) {
-                $remaining = $deadline - microtime(true);
-                if ($remaining < 3) {
-                    return null;
-                }
-
-                $timeout = (int) min($this->refresh ? 100 : 30, $remaining);
-                $startedAt = microtime(true);
-
-                try {
-                    $response = Http::withHeaders(['User-Agent' => 'DiscStats/1.0'])
-                        ->acceptJson()
-                        ->connectTimeout(4)
-                        ->timeout($timeout)
-                        ->get($endpoint, ['data' => $this->refresh ? str_replace('[timeout:25]', '[timeout:90]', $query) : $query])
-                        ->throw();
-
-                    // Overloaded servers can answer 200 with an error remark and no elements;
-                    // that is a failure, not "this country has no courses".
-                    $remark = (string) $response->json('remark', '');
-                    if ($remark !== '' && preg_match('/error|timed out|out of memory|too busy/i', $remark)) {
-                        Cache::put($downKey, true, now()->addMinutes(5));
-                        continue 2;
-                    }
-
-                    return $response->json('elements', []);
-                } catch (ConnectionException $exception) {
-                    // Couldn't connect: skip this server for an hour. No answer after 10+ seconds: skip it
-                    // for 10 minutes. A short attempt cut off by our own time budget says nothing about it.
-                    $couldNotConnect = microtime(true) - $startedAt < $timeout - 1;
-                    if ($couldNotConnect) {
-                        Cache::put($downKey, true, now()->addHour());
-                    } elseif ($timeout >= 10) {
-                        Cache::put($downKey, true, now()->addMinutes(10));
-                    }
-                    continue 2;
-                } catch (RequestException $exception) {
-                    $status = $exception->response->status();
-                    // Rate limited: one short retry. Overloaded (504) or rate limited twice: rest it for a few minutes.
-                    if ($status === 429 && $attempt === 1) {
-                        usleep(1_500_000);
-                        continue;
-                    }
-                    if (in_array($status, [429, 504], true)) {
-                        Cache::put($downKey, true, now()->addMinutes($status === 504 ? 5 : 2));
-                    }
-                    continue 2;
-                }
-            }
-        }
-
-        return null;
     }
 
     /** Every country course list currently in the cache, merged. */

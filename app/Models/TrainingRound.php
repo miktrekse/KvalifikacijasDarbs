@@ -89,6 +89,46 @@ class TrainingRound extends Model
         return $this->status === 'completed';
     }
 
+    /**
+     * The player who started the round finishes and reopens it. If they have left it
+     * (deleted it from their list, or their account is gone), anyone still on it may.
+     */
+    public function isManagedBy(int $userId): bool
+    {
+        if ((int) $this->user_id === $userId) {
+            return true;
+        }
+
+        $ownerStillOnIt = $this->user_id !== null && $this->isVisibleTo((int) $this->user_id);
+
+        return !$ownerStillOnIt && $this->isVisibleTo($userId);
+    }
+
+    /**
+     * The one definition of a finished round for a player: holed out on every hole.
+     * Used by the round itself, the training list and the profile stats.
+     * Expects holes.shots to be loaded.
+     */
+    public function isFinishedBy(int $userId): bool
+    {
+        return $this->holes->isNotEmpty()
+            && $this->holes->every(fn (TrainingRoundHole $hole) => $this->holeScore($hole, $userId) !== null);
+    }
+
+    /** Holes still open, summed over everyone who still has the round. Expects players and holes.shots. */
+    public function openHoleCount(): int
+    {
+        return $this->players->whereNull('pivot.removed_at')->sum(
+            fn (User $player) => $this->holes->filter(fn (TrainingRoundHole $hole) => $this->holeScore($hole, $player->id) === null)->count()
+        );
+    }
+
+    /** True once anybody has logged anything. Expects holes.shots. */
+    public function hasScores(): bool
+    {
+        return $this->holes->contains(fn (TrainingRoundHole $hole) => $hole->shots->isNotEmpty());
+    }
+
     public function par(): int
     {
         return (int) $this->holes->sum('par');

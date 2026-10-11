@@ -22,10 +22,23 @@
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 <span id="live-pill" class="ds-score-live"></span>
-                @if(!$round->isCompleted())
-                    <form method="POST" action="{{ route('training.complete', $round->id) }}" onsubmit="return confirm('Finish this round? The scorecard becomes read-only.');">
+                @if($canManage && !$round->isCompleted())
+                    @php
+                        $finishConfirm = $openHoles
+                            ? $openHoles . ' ' . Str::plural('hole', $openHoles) . ' still open. Finish early anyway? The scorecard becomes read-only until you reopen it.'
+                            : 'Finish this round? The scorecard becomes read-only.';
+                    @endphp
+                    <form method="POST" action="{{ route('training.complete', $round->id) }}" onsubmit="return confirm(@js($finishConfirm));">
                         @csrf
-                        <button type="submit" class="ds-btn ds-btn--ghost !py-2">Finish round</button>
+                        @if($openHoles)
+                            <input type="hidden" name="finish_early" value="1">
+                        @endif
+                        <button type="submit" class="ds-btn ds-btn--ghost !py-2">{{ $openHoles ? 'Finish early' : 'Finish round' }}</button>
+                    </form>
+                @elseif($canManage)
+                    <form method="POST" action="{{ route('training.reopen', $round->id) }}">
+                        @csrf
+                        <button type="submit" class="ds-btn ds-btn--ghost !py-2">Reopen round</button>
                     </form>
                 @endif
                 <a href="{{ route('training.edit', $round->id) }}" class="ds-btn ds-btn--ghost !py-2">

@@ -7,8 +7,10 @@ use App\Models\Category;
 use App\Models\User;
 use App\Models\Comment;
 use App\Rules\NotReservedEmail;
+use App\Support\AccountRemoval;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class DashboardController extends Controller
@@ -86,30 +88,51 @@ class DashboardController extends Controller
         return view('admin.users.edit', compact('user'));
     }
 
+    /**
+     * Same rules as the edit page, enforced here too because a PUT can be sent without it:
+     * admins never change their own account from this screen, and the last admin keeps the role.
+     */
     public function updateUser(Request $request, $id)
     {
         $user = User::withoutGuests()->findOrFail($id);
+
+        if ($user->id === Auth::id()) {
+            return redirect()->route('admin.users')->with('error', 'You cannot edit your own account here.');
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,' . $user->id, new NotReservedEmail()],
             'role' => 'required|in:user,verified,admin',
+            'password' => 'nullable|string|min:8|confirmed',
         ]);
 
-        $user->update([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'role' => $validated['role'],
-        ]);
+        $error = DB::transaction(function () use ($user, $validated) {
+            // Locked, so two admins demoting each other at once can't leave nobody in charge
+            $admins = User::where('role', 'admin')->lockForUpdate()->pluck('id');
+            if ($user->isAdmin() && $validated['role'] !== 'admin' && $admins->count() <= 1) {
+                return 'DiscStats needs at least one admin.';
+            }
 
-        if ($request->filled('password')) {
-            $request->validate(['password' => 'string|min:8|confirmed']);
-            $user->update(['password' => Hash::make($request->password)]);
-        }
+            $user->update([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'role' => $validated['role'],
+            ] + (!empty($validated['password']) ? ['password' => Hash::make($validated['password'])] : []));
 
-        return redirect()->route('admin.users')->with('success', 'User updated successfully!');
+            return null;
+        });
+
+        return $error
+            ? back()->withInput()->with('error', $error)
+            : redirect()->route('admin.users')->with('success', 'User updated successfully!');
     }
 
+    /**
+     * "Delete" anonymises the account (see AccountRemoval): the person and their login are
+     * gone, but tournaments, scorecards, shared training rounds and ratings are untouched.
+     * Admins are demoted first, so one admin can't remove another with a single click.
+     */
     public function destroyUser($id)
     {
         $user = User::withoutGuests()->findOrFail($id);
@@ -117,13 +140,13 @@ class DashboardController extends Controller
         if ($user->id === Auth::id()) {
             return redirect()->route('admin.users')->with('error', 'You cannot delete your own account.');
         }
+        if ($user->isAdmin()) {
+            return redirect()->route('admin.users')->with('error', 'Remove the admin role before deleting this account.');
+        }
 
-        $user->exercises()->delete();
-        $user->addedExercises()->detach();
-        
-        $user->delete();
+        AccountRemoval::anonymize($user);
 
-        return redirect()->route('admin.users')->with('success', 'User deleted successfully!');
+        return redirect()->route('admin.users')->with('success', 'User deleted. Their results stay in past tournaments as "' . AccountRemoval::ANONYMOUS_NAME . '".');
     }
 
     public function manageExercises()

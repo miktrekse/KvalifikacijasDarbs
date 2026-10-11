@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Jobs\RecalculateRatings;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -138,10 +139,25 @@ class User extends Authenticatable
         return $this->role === 'guest';
     }
 
-    /** Real accounts only: the shared guest login isn't a user and stays out of lists, counts and searches. */
+    /**
+     * Real accounts only: the shared guest login isn't a user, and a removed (anonymised)
+     * account only lives on in old results, so both stay out of lists, counts and searches.
+     */
     public function scopeWithoutGuests($query)
     {
-        return $query->where('role', '!=', 'guest');
+        return $query->where('role', '!=', 'guest')->whereNull('anonymized_at');
+    }
+
+    public function isAnonymized(): bool
+    {
+        return $this->anonymized_at !== null;
+    }
+
+    protected static function booted(): void
+    {
+        // Accounts are normally anonymised, not deleted (AccountRemoval). If a row is deleted
+        // anyway, its tournament rounds go with it, so every rating after them must be replayed.
+        static::deleted(fn () => RecalculateRatings::dispatch());
     }
 
     public const VERIFY_AFTER_COMPETITIONS = 3;

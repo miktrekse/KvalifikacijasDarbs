@@ -83,8 +83,7 @@ class ProfileController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
-        $finished = $rounds->filter(fn (TrainingRound $round) => $round->holes->isNotEmpty()
-            && $round->holes->every(fn ($hole) => $hole->shots->sortBy('shot_number')->last()?->result === 'in_basket'));
+        $finished = $rounds->filter(fn (TrainingRound $round) => $round->isFinishedBy($user->id));
 
         $statRounds = $finished->map(fn (TrainingRound $round) => [
             'stats' => RoundStats::forRound($round->holes, $user->id),
@@ -113,14 +112,28 @@ class ProfileController extends Controller
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
+        // The new picture is stored first and the old one removed only once the profile points
+        // at the new file, so a failed upload or save never leaves the account without a picture.
+        $oldAvatar = $user->avatar;
         if ($request->hasFile('avatar')) {
-            if ($user->avatar) {
-                Storage::disk('public')->delete($user->avatar);
-            }
             $validated['avatar'] = $request->file('avatar')->store('avatars', 'public');
+            if ($validated['avatar'] === false) {
+                return back()->withInput()->withErrors(['avatar' => 'The picture could not be saved. Please try again.']);
+            }
         }
 
-        $user->update($validated);
+        try {
+            $user->update($validated);
+        } catch (\Throwable $e) {
+            if (isset($validated['avatar'])) {
+                Storage::disk('public')->delete($validated['avatar']);
+            }
+            throw $e;
+        }
+
+        if (isset($validated['avatar']) && $oldAvatar) {
+            Storage::disk('public')->delete($oldAvatar);
+        }
 
         return redirect()->route('profile.show', $user)->with('success', 'Profile updated successfully.');
     }

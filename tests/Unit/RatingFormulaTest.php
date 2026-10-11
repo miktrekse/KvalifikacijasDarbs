@@ -24,6 +24,12 @@ class RatingFormulaTest extends TestCase
         $this->assertSame(936, $course->ratingFor(56));
     }
 
+    public function test_round_rating_never_goes_below_zero(): void
+    {
+        // 20 strokes on each of 18 holes, the most the scorecard allows: 950 − 7 × 306 would be −1192
+        $this->assertSame(Course::MIN_RATING, $this->course()->ratingFor(360));
+    }
+
     public function test_players_are_unrated_until_three_rounds(): void
     {
         $engine = new RatingEngine();
