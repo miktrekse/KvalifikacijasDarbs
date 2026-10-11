@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\RecalculateRatings;
 use Illuminate\Http\Request;
 use App\Models\Competition;
 use App\Models\CompetitionRegistration;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Course;
-use App\Support\RatingEngine;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -378,12 +378,7 @@ class CompetitionController extends Controller
 
         // Completing (or re-opening) a tournament changes its ratings and every rating after it
         if ($competition->status === 'completed' || $competition->rated_at !== null) {
-            app(RatingEngine::class)->recalculate();
-        }
-
-        if ($competition->status === 'completed') {
-            $competition->registrations()->with('user')->get()
-                ->each(fn ($registration) => $registration->user?->syncVerification());
+            RecalculateRatings::dispatch();
         }
 
         return redirect()->route('competitions.view', $competition->id)
@@ -462,7 +457,7 @@ class CompetitionController extends Controller
         $competition->delete();
 
         if ($wasRated) {
-            app(RatingEngine::class)->recalculate();
+            RecalculateRatings::dispatch();
         }
 
         return redirect()->route('competitions.index')

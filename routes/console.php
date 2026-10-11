@@ -1,8 +1,8 @@
 <?php
 
 use App\Http\Controllers\CourseController;
+use App\Jobs\RecalculateRatings;
 use App\Models\Competition;
-use App\Support\RatingEngine;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -22,8 +22,9 @@ Artisan::command('competitions:sync', function () {
 Schedule::command('competitions:sync')->everyMinute();
 
 Artisan::command('ratings:recalculate', function () {
-    // Replays every completed tournament in date order: course ratings, round ratings and player ratings
-    $result = app(RatingEngine::class)->recalculate();
+    // Replays every completed tournament in date order: course ratings, round ratings and player ratings.
+    // Runs right here instead of on the queue; the engine's lock still keeps it from overlapping a worker.
+    $result = app()->call([new RecalculateRatings(), 'handle']);
     $this->info("Rated {$result['rounds']} rounds across {$result['events']} tournaments; {$result['rated_players']} players now have a rating.");
 })->purpose('Recalculate all course, round and player ratings from tournament results');
 

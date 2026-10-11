@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\RecalculateRatings;
 use App\Models\Competition;
 use App\Models\CompetitionGroup;
 use App\Models\CompetitionHole;
 use App\Models\CompetitionShot;
 use App\Models\TrainingRoundShot;
 use App\Support\CardScores;
-use App\Support\RatingEngine;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -142,9 +143,8 @@ class CompetitionScoringController extends Controller
             'distance_m' => ['nullable', 'integer', 'min:1', 'max:300'],
         ]);
 
-        // Two scorers on the same card may tap at once; lock the player's hole while numbering the shot.
-        $shot = DB::transaction(function () use ($hole, $userId, $request) {
-            $shots = $this->myCopy($hole, $userId)->lockForUpdate()->get();
+        $shot = $this->writeHole($hole, function () use ($hole, $userId, $request) {
+            $shots = $this->myCopy($hole, $userId)->get();
             abort_if($shots->last()?->result === 'in_basket', 422, 'You already finished this hole for that player.');
 
             return $hole->shots()->create([
@@ -179,8 +179,8 @@ class CompetitionScoringController extends Controller
             'strokes' => ['nullable', 'integer', 'min:1', 'max:' . TrainingRoundShot::MAX_HOLE_SCORE],
         ])['strokes'] ?? null;
 
-        $shot = DB::transaction(function () use ($hole, $userId, $strokes) {
-            $shots = $this->myCopy($hole, $userId)->lockForUpdate()->get();
+        $shot = $this->writeHole($hole, function () use ($hole, $userId, $strokes) {
+            $shots = $this->myCopy($hole, $userId)->get();
             abort_if($shots->contains(fn (CompetitionShot $shot) => !$shot->score_only), 422, 'You are tracking this hole shot by shot for that player.');
 
             $this->myCopy($hole, $userId)->delete();
@@ -213,11 +213,10 @@ class CompetitionScoringController extends Controller
         $userId = $this->authorizeShot($request, $competition, $hole);
         $scorerId = $request->validate(['scorer_id' => ['required', 'integer']])['scorer_id'];
 
-        $shots = DB::transaction(function () use ($hole, $userId, $scorerId) {
+        $shots = $this->writeHole($hole, function () use ($hole, $userId, $scorerId) {
             $theirs = $hole->shots()->where('user_id', $userId)->where('recorded_by', $scorerId)->orderBy('shot_number')->get();
             abort_unless($theirs->last()?->result === 'in_basket', 422, 'That scorer has not finished this hole.');
 
-            $this->myCopy($hole, $userId)->lockForUpdate()->get();
             $this->myCopy($hole, $userId)->delete();
 
             return $theirs->map(fn (CompetitionShot $shot) => $hole->shots()->create([
@@ -314,8 +313,7 @@ class CompetitionScoringController extends Controller
 
         // A finished tournament's scores feed round, course and player ratings
         if ($competition->status === 'completed') {
-            app(RatingEngine::class)->recalculate();
-            $competition->registrations()->with('user')->get()->each(fn ($registration) => $registration->user?->syncVerification());
+            RecalculateRatings::dispatch();
         } else {
             $competition->finishIfComplete();
         }
@@ -332,6 +330,25 @@ class CompetitionScoringController extends Controller
             ->get()
             ->sortBy(fn ($registration) => [$registration->group->number, $registration->user->name])
             ->values();
+    }
+
+    /**
+     * Runs one change to a hole's scores. Every write on the hole waits for the hole row, so
+     * two taps can't both take shot 1 even while the hole is still empty (locking the shots
+     * alone can't cover that: there is no row to lock yet). If the database still reports a
+     * duplicate shot, the scorer gets a clear 409 instead of a server error.
+     */
+    private function writeHole(CompetitionHole $hole, \Closure $write): mixed
+    {
+        try {
+            return DB::transaction(function () use ($hole, $write) {
+                CompetitionHole::whereKey($hole->id)->lockForUpdate()->first();
+
+                return $write();
+            });
+        } catch (UniqueConstraintViolationException) {
+            abort(409, 'That throw was already saved from another tap. Your scorecard will refresh.');
+        }
     }
 
     /** The current scorer's own copy of a player's hole. */
@@ -357,7 +374,7 @@ class CompetitionScoringController extends Controller
         $competition = Competition::findOrFail($id);
         $userId = $this->authorizeShot($request, $competition, $hole);
 
-        $this->myCopy($hole, $userId)->reorder('shot_number', 'desc')->first()?->delete();
+        $this->writeHole($hole, fn () => $this->myCopy($hole, $userId)->reorder('shot_number', 'desc')->first()?->delete());
 
         return response()->json(['ok' => true]);
     }

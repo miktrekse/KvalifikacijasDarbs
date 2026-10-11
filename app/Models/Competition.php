@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Jobs\RecalculateRatings;
 use App\Support\CompetitionGrouping;
-use App\Support\RatingEngine;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -144,8 +144,11 @@ class Competition extends Model
     }
 
     /**
-     * Completes the tournament as soon as the last card holes out, then rates it:
-     * round ratings, the course rating and every player's new rating.
+     * Completes the tournament as soon as the last card holes out, then queues the rating
+     * replay (round ratings, the course rating and every player's new rating).
+     *
+     * The last two putts can arrive at the same moment, so the status only flips with a
+     * conditional update: exactly one request wins it and queues the ratings.
      */
     public function finishIfComplete(): bool
     {
@@ -153,11 +156,16 @@ class Competition extends Model
             return false;
         }
 
-        $this->update(['status' => 'completed']);
-        app(RatingEngine::class)->recalculate();
-        $this->registrations()->with('user')->get()->each(fn ($registration) => $registration->user?->syncVerification());
+        $won = static::whereKey($this->id)
+            ->where('status', 'ongoing')
+            ->update(['status' => 'completed', 'updated_at' => now()]);
 
-        return true;
+        $this->refresh();
+        if ($won) {
+            RecalculateRatings::dispatch();
+        }
+
+        return $this->status === 'completed';
     }
 
     public function course(): BelongsTo

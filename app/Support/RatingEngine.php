@@ -8,6 +8,7 @@ use App\Models\RoundRating;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -44,8 +45,23 @@ class RatingEngine
 
     public const MAX_ROUNDS = 20;
 
-    /** @return array{events: int, rounds: int, rated_players: int} */
+    /** Longest a replay may hold the lock, and how long another one waits for it. */
+    private const LOCK_SECONDS = 600;
+
+    /**
+     * The replay wipes and rebuilds every round, course and player rating, so two of them
+     * must never overlap: one global lock queues every caller (jobs, artisan, tests).
+     *
+     * @return array{events: int, rounds: int, rated_players: int}
+     */
     public function recalculate(): array
+    {
+        return Cache::lock('ratings:recalculate', self::LOCK_SECONDS)
+            ->block(self::LOCK_SECONDS, fn () => $this->replay());
+    }
+
+    /** @return array{events: int, rounds: int, rated_players: int} */
+    private function replay(): array
     {
         return DB::transaction(function () {
             RoundRating::query()->delete();

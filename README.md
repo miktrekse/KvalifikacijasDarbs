@@ -85,6 +85,16 @@ Production serverī schedulerim vajag vienu cron ierakstu:
 
 Windows serverī to pašu dara Task Scheduler uzdevums, kas katru minūti izpilda `php artisan schedule:run`.
 
+### Queue worker ir obligāts
+
+Reitingi tiek pārrēķināti fonā (`App\Jobs\RecalculateRatings`), nevis tajā pašā pieprasījumā, kurā tiek ievadīts pēdējais metiens. **Bez queue worker turnīrs gan kļūst "completed", bet reitingi un verified statuss neatjaunojas.** Production serverī jābūt pastāvīgi strādājošam procesam (piemēram, ar Supervisor):
+
+```
+php artisan queue:work --tries=3 --timeout=600
+```
+
+Pārrēķinu vienlaikus var veikt tikai viens process: to nodrošina globāla atslēga (`Cache::lock`), tāpēc tā paša cache store (`CACHE_STORE`) jāizmanto visiem serveriem.
+
 ### Noderīgas komandas
 
 ```bash
