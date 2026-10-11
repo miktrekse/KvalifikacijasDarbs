@@ -33,6 +33,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'anonymized_at' => 'datetime',
             'date_of_birth' => 'date',
             'rating' => 'integer',
             'password' => 'hashed',
@@ -156,14 +157,18 @@ class User extends Authenticatable
         return $this->isVerified() || $this->isAdmin();
     }
 
+    /**
+     * Completed competitions the player actually played to the end: a round rating only
+     * exists when they holed out on every hole, so registering alone never counts.
+     */
     public function completedCompetitionsCount(): int
     {
-        return $this->competitionRegistrations()
+        return $this->roundRatings()
             ->whereHas('competition', fn ($query) => $query->where('status', 'completed'))
             ->count();
     }
 
-    /** Promotes a regular user to verified after enough completed competitions. */
+    /** Promotes a regular user to verified after enough finished competition rounds. */
     public function syncVerification(): void
     {
         if ($this->isUser() && $this->completedCompetitionsCount() >= self::VERIFY_AFTER_COMPETITIONS) {

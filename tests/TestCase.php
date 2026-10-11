@@ -57,6 +57,39 @@ abstract class TestCase extends BaseTestCase
         ]);
     }
 
+    /**
+     * A competition with this many players whose groups are drawn and whose round has
+     * started (status ongoing, clock frozen just after the start).
+     *
+     * @return array{0: Competition, 1: \Illuminate\Support\Collection<int, User>}
+     */
+    protected function startedCompetition(int $players = 4, array $attributes = []): array
+    {
+        $competition = $this->competition($attributes);
+        $field = User::factory()->count($players)->create()
+            ->each(fn (User $player) => $this->registerPlayer($competition, $player));
+
+        $this->travelToMinutesBeforeStart($competition, -1);
+        $competition->syncLifecycle();
+
+        return [$competition->refresh(), $field];
+    }
+
+    /** Scores every hole for the player as one number (score-only), as their own scorer. */
+    protected function finishRound(Competition $competition, User $player, int $strokesPerHole = 3): void
+    {
+        foreach ($competition->courseHoles as $hole) {
+            $hole->shots()->create([
+                'user_id' => $player->id,
+                'recorded_by' => $player->id,
+                'shot_number' => 1,
+                'result' => 'in_basket',
+                'strokes' => $strokesPerHole,
+                'score_only' => true,
+            ]);
+        }
+    }
+
     /** Freezes the clock this many minutes before (negative: after) the event's start. */
     protected function travelToMinutesBeforeStart(Competition $competition, int $minutes): void
     {
